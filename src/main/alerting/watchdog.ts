@@ -14,8 +14,8 @@ export interface AlertEvent {
   timestamp: number
 }
 
-// ~1 minute of samples at the engine's 2s ping cadence.
-const WINDOW_SIZE = 30
+// ~1 minute of samples at the engine's 1s ping cadence.
+const WINDOW_SIZE = 60
 // Don't evaluate off a handful of samples right after a target is added -
 // one lost packet out of two looks like 50% loss.
 const MIN_SAMPLES = 5

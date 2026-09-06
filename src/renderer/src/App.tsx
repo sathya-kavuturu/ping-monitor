@@ -9,13 +9,14 @@ import type {
 import { CHART_WINDOW_MS } from './lib/chart-data'
 import Sidebar from './components/Sidebar'
 import MainContent from './components/MainContent'
-import UpdateBanner from './components/UpdateBanner'
+import UpdateDialog from './components/UpdateDialog'
 
 export interface TargetWithStatus extends Target {
   status: TargetStatus
 }
 
 function App(): React.JSX.Element {
+  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [targets, setTargets] = useState<TargetWithStatus[]>([])
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null)
   // Rolling last-10-minutes buffer per target, ascending by timestamp. Feeds
@@ -112,26 +113,41 @@ function App(): React.JSX.Element {
   const liveUpdates = selectedTargetId ? (updatesByTarget[selectedTargetId] ?? []) : []
 
   return (
-    <div className="app-shell-outer">
-      <UpdateBanner />
-      <div className="app-shell">
-        <Sidebar
-          targets={targets}
-          selectedTargetId={selectedTargetId}
-          onSelectTarget={handleSelectTarget}
-          onCreateTarget={handleCreateTarget}
-          isCreating={isCreating}
-          error={loadError}
-          createError={createError}
-        />
-        <MainContent
-          target={selectedTarget}
-          liveUpdates={liveUpdates}
-          pingHistory={pingHistory}
-          historyError={historyError}
-          onRefreshHistory={handleRefreshHistory}
-        />
-      </div>
+    <div className={`app-shell ${sidebarOpen ? '' : 'app-shell--sidebar-closed'}`}>
+      <button
+        type="button"
+        className="sidebar-toggle"
+        onClick={() => setSidebarOpen((open) => !open)}
+        aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+        aria-expanded={sidebarOpen}
+      >
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+          <path
+            d="M2 3.5h12M2 8h12M2 12.5h12"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
+      <Sidebar
+        isOpen={sidebarOpen}
+        targets={targets}
+        selectedTargetId={selectedTargetId}
+        onSelectTarget={handleSelectTarget}
+        onCreateTarget={handleCreateTarget}
+        isCreating={isCreating}
+        error={loadError}
+        createError={createError}
+      />
+      <MainContent
+        target={selectedTarget}
+        liveUpdates={liveUpdates}
+        pingHistory={pingHistory}
+        historyError={historyError}
+        onRefreshHistory={handleRefreshHistory}
+      />
+      <UpdateDialog />
     </div>
   )
 }

@@ -13,7 +13,7 @@ export const IpcChannels = {
   AlertRulesDelete: 'alert-rules:delete',
   NetworkUpdate: 'network:update',
   UpdateCheck: 'update:check',
-  UpdateInstall: 'update:install',
+  UpdateDownload: 'update:download',
   UpdateStatus: 'update:status'
 } as const
 

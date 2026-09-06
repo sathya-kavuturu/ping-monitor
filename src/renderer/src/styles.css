@@ -28,45 +28,100 @@ body {
   color: var(--text);
 }
 
-.app-shell-outer {
+.app-shell {
   display: flex;
-  flex-direction: column;
   height: 100vh;
   overflow: hidden;
 }
 
-.app-shell {
+.update-dialog {
+  position: fixed;
+  left: 20px;
+  bottom: 20px;
+  z-index: 100;
+  width: 260px;
   display: flex;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
-.update-banner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  padding: 8px 16px;
-  background: rgba(79, 140, 255, 0.15);
-  border-bottom: 1px solid var(--accent);
+.update-dialog-title {
   font-size: 13px;
-  flex-shrink: 0;
-}
-
-.update-banner-text {
+  font-weight: 600;
   color: var(--text);
 }
 
-.update-banner-btn {
-  background: var(--accent);
-  border: none;
+.update-dialog-text {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.update-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.update-dialog-btn {
+  background: transparent;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  color: #fff;
+  color: var(--text);
   padding: 6px 14px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
+}
+
+.update-dialog-btn:hover {
+  border-color: var(--accent);
+}
+
+.update-dialog-btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.update-progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.update-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+
+.sidebar-toggle {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 60;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.sidebar-toggle:hover {
+  color: var(--text);
+  border-color: var(--accent);
 }
 
 .sidebar {
@@ -74,8 +129,27 @@ body {
   flex-shrink: 0;
   background: var(--bg-elevated);
   border-right: 1px solid var(--border);
-  padding: 16px 12px;
+  padding: 56px 12px 16px;
   overflow-y: auto;
+  overflow-x: hidden;
+  white-space: nowrap;
+  transition:
+    width 0.18s ease,
+    padding-left 0.18s ease,
+    padding-right 0.18s ease;
+}
+
+.sidebar--closed {
+  width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  border-right: none;
+}
+
+/* With the sidebar collapsed, the fixed top-left toggle button would
+   otherwise sit directly on top of the main content's header/title. */
+.app-shell--sidebar-closed .main-content {
+  padding-left: 64px;
 }
 
 .sidebar-title {

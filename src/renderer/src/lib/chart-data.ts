@@ -5,8 +5,8 @@ export const CHART_WINDOW_MS = 10 * 60 * 1000
 
 // Trailing-sample window used to smooth the packet-loss series - a raw
 // per-sample 0/100 signal is too spiky to read as a trend at a glance.
-// ~15 samples is ~30s at the engine's 2s ping cadence.
-const LOSS_ROLLING_WINDOW = 15
+// 30 samples is ~30s at the engine's 1s ping cadence.
+const LOSS_ROLLING_WINDOW = 30
 
 export interface ChartSeries {
   /** Unix seconds (uPlot's expected unit for its time axis), ascending. */

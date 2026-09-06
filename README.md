@@ -33,7 +33,7 @@ src/
     tray.ts               # system tray icon + context menu (Show Dashboard / Quit)
     utils.ts
     network/
-      engine.ts            # NetworkEngine - per-target ping (2s) + traceroute (30s) loops
+      engine.ts            # NetworkEngine - per-target ping (1s) + traceroute (30s) loops
       ping-probe.ts          # real ICMP latency via the `ping` npm package
       traceroute.ts           # real tracert/traceroute via child_process, output parsed to HopSample[]
     alerting/
@@ -99,7 +99,7 @@ src/
 | renderer → main | `alert-rules:create` | `window.api.createAlertRule(input)` | `AlertRule` |
 | renderer → main | `alert-rules:set-enabled` | `window.api.setAlertRuleEnabled(id, enabled)` | `AlertRule` |
 | renderer → main | `alert-rules:delete` | `window.api.deleteAlertRule(id)` | `void` |
-| main → renderer | `network:update` | `window.api.onNetworkUpdate(cb)` | `NetworkUpdate` (per target, every ~2s) |
+| main → renderer | `network:update` | `window.api.onNetworkUpdate(cb)` | `NetworkUpdate` (per target, every ~1s) |
 
 `onNetworkUpdate` subscribes to a push stream the `NetworkEngine` drives (see below) and returns
 an unsubscribe function so React components can clean up listeners on unmount.
@@ -125,7 +125,7 @@ since the CLI isn't around to do it for us. See `src/main/db/client.ts#initDatab
 **Schema** (`prisma/schema.prisma`):
 
 - `Target` — one row per monitored host (`id`, `name`, `host`, `createdAt`).
-- `PingHistory` — one row per **completed 1-minute rollup**, not one row per sample: raw ~2s
+- `PingHistory` — one row per **completed 1-minute rollup**, not one row per sample: raw ~1s
   probes are buffered in memory (`src/main/index.ts`) and flushed once a minute via
   `savePingRollup`, storing `sampleCount`, `lostCount`, and min/avg/max latency. At ~30
   samples/min that's ~1,440 rows/day/target instead of ~43,000.
@@ -140,7 +140,7 @@ since the CLI isn't around to do it for us. See `src/main/db/client.ts#initDatab
 `NetworkEngine` (`engine.ts`) is the actual monitoring service. It owns one independent timer
 pair per target - no shared "tick" loop - so a slow probe on one target never delays another's:
 
-- **Ping, every 2s** (`ping-probe.ts`): one ICMP echo via the OS `ping` command, through the
+- **Ping, every 1s** (`ping-probe.ts`): one ICMP echo via the OS `ping` command, through the
   [`ping`](https://www.npmjs.com/package/ping) npm package (`ping.promise.probe`, `min_reply: 1`,
   `timeout: 1.5s`). Returns latency in ms, or `null` if the packet was lost - the engine derives
   `status` from that (`null` → `offline`, `> 150ms` → `degraded`, else `online`) and broadcasts a
@@ -152,7 +152,7 @@ pair per target - no shared "tick" loop - so a slow probe on one target never de
   **Decoupled from the ping cadence on purpose**: a real traceroute routinely takes many seconds
   to tens of seconds (each unresponsive hop waits out its own timeout, and Windows' `tracert` has
   no way to limit probes-per-hop the way Unix's `-q 1` does, so a silent hop there costs 3x the
-  per-hop timeout) - running it every 2s would either queue up runs behind each other or hammer
+  per-hop timeout) - running it every 1s would either queue up runs behind each other or hammer
   the network. A hard 45s kill-timer bounds one pathological target's traceroute from blocking
   its own next attempt indefinitely.
 
@@ -171,7 +171,7 @@ both components below - no DB round trip, no polling, just the live IPC stream.
 **Timeline chart** (`TimelineChart.tsx`), via [uPlot](https://github.com/leeoniya/uPlot) - chosen
 over a React-native charting lib (Recharts/ECharts) because it's canvas-based and built
 specifically to redraw fast and often, which is exactly this use case (a fresh sample arrives
-every ~2s per target and has to hit the chart without jank). It's a thin imperative wrapper: the
+every ~1s per target and has to hit the chart without jank). It's a thin imperative wrapper: the
 `uPlot` instance is created once in a `useEffect` and updated via `.setData()`/`.setSize()`
 afterwards - never torn down and rebuilt on every tick, and never a React-managed DOM subtree.
 Two series share the plot: **latency** (ms, left axis; a lost sample is `null`, which uPlot
@@ -200,7 +200,7 @@ For each `AlertRule` belonging to that target (configured via the **Alerts** pan
 least 5 samples before evaluating (so one lost packet right after a target is added doesn't read
 as "50% loss"), and compares it against `thresholdValue`. Firing is **edge-triggered**: a
 notification goes out on the OK -> breached transition, then only once every 5 minutes while it
-stays breached (not on every 2s tick), plus once more on breached -> OK ("recovered"). The
+stays breached (not on every 1s tick), plus once more on breached -> OK ("recovered"). The
 watchdog only ever calls back into `onAlert` - it doesn't know `Notification` exists.
 
 `notifyAlertEvent` (`notifications.ts`) turns that callback into Electron's native `Notification`

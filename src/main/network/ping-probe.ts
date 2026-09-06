@@ -1,8 +1,11 @@
 import ping from 'ping'
 
-// Kept comfortably under the engine's 2s tick so a single slow probe can't
-// still be in flight when the next tick fires.
-const PING_TIMEOUT_SECONDS = 1.5
+// Kept comfortably under the engine's 1s tick so a single slow/lost probe
+// can't still be in flight when the next tick fires - otherwise the
+// engine's in-flight guard skips that tick, silently halving the
+// effective cadence for exactly the unreachable targets where a
+// consistent cadence matters most.
+const PING_TIMEOUT_SECONDS = 0.8
 
 /**
  * Sends one ICMP echo via the OS `ping` command and returns the round-trip

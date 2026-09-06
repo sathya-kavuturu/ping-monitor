@@ -1,6 +1,7 @@
 import type { HopSample, NetworkUpdate, TargetStatus } from '../../shared/types'
 import { probeLatency } from './ping-probe'
 import { runTraceroute } from './traceroute'
+import { resolveHopHostnames } from './reverse-dns'
 
 export interface EngineTarget {
   id: string
@@ -8,12 +9,12 @@ export interface EngineTarget {
 }
 
 export interface NetworkEngineOptions {
-  /** How often each target is pinged. Default 2000ms, per the spec. */
+  /** How often each target is pinged. Default 1000ms, per the spec. */
   pingIntervalMs?: number
   /**
    * How often each target's traceroute path is refreshed. Traceroute
    * inherently takes several seconds to tens of seconds (each hop timeout
-   * is itself ~2s), so it cannot run on the same 2s cadence as ping without
+   * is itself ~1-3s), so it cannot run on the same cadence as ping without
    * runs piling up - it's decoupled onto its own, much slower, timer.
    * Default 30_000ms.
    */
@@ -36,7 +37,7 @@ interface TargetState {
   hopsCapturedAt: number | null
 }
 
-const DEFAULT_PING_INTERVAL_MS = 2_000
+const DEFAULT_PING_INTERVAL_MS = 1_000
 const DEFAULT_TRACE_INTERVAL_MS = 30_000
 const DEFAULT_DEGRADED_THRESHOLD_MS = 150
 
@@ -141,9 +142,10 @@ export class NetworkEngine {
   private async runTrace(state: TargetState): Promise<void> {
     try {
       const hops = await runTraceroute(state.target.host)
-      state.lastHops = hops
+      const resolvedHops = await resolveHopHostnames(hops)
+      state.lastHops = resolvedHops
       state.hopsCapturedAt = Date.now()
-      this.onTraceroute?.(state.target.id, hops)
+      this.onTraceroute?.(state.target.id, resolvedHops)
     } catch (error) {
       console.error(`Traceroute failed for ${state.target.host}:`, error)
     }

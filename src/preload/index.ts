@@ -39,7 +39,7 @@ const api: ExposedApi = {
 
   checkForUpdates: () => ipcRenderer.send(IpcChannels.UpdateCheck),
 
-  installUpdate: () => ipcRenderer.send(IpcChannels.UpdateInstall),
+  downloadUpdate: () => ipcRenderer.send(IpcChannels.UpdateDownload),
 
   onUpdateStatus: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, status: UpdateStatusEvent): void => {

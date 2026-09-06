@@ -90,7 +90,9 @@ function parseWindowsLine(line: string): HopSample | null {
   const latencyMs =
     times.length > 0 ? times.reduce((sum, value) => sum + value, 0) / times.length : null
 
-  // We run with -d (no DNS resolution), so there's never a hostname to report.
+  // We run with -d (no DNS resolution) so a hop with no PTR record can't
+  // hang the trace - `hostname` is filled in afterward, separately and
+  // timeout-bounded, by `resolveHopHostnames` in engine.ts.
   return { hopNumber, address, hostname: null, latencyMs }
 }
 

@@ -61,12 +61,20 @@ export async function savePingRollup(input: PingRollupInput): Promise<PingHistor
 export async function getPingHistory(query: PingHistoryQuery): Promise<PingHistory[]> {
   const { targetId, from, to, limit = 500 } = query
 
-  return getPrisma().pingHistory.findMany({
+  // Ordering by 'asc' and taking `limit` would return the OLDEST rows in
+  // range, not the most recent ones - harmless for a target only a few
+  // hours old, but once a target has accumulated more than `limit` minutes
+  // of history, the UI would get stuck showing the same old window
+  // forever and never advance. Fetch the most recent `limit` rows instead,
+  // then flip back to chronological order for the caller.
+  const rows = await getPrisma().pingHistory.findMany({
     where: {
       targetId,
       bucketStart: { gte: from, lte: to }
     },
-    orderBy: { bucketStart: 'asc' },
+    orderBy: { bucketStart: 'desc' },
     take: limit
   })
+
+  return rows.reverse()
 }

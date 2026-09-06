@@ -13,7 +13,7 @@ import { NetworkEngine } from './network/engine'
 import { AlertWatchdog } from './alerting/watchdog'
 import { notifyAlertEvent } from './alerting/notifications'
 import { createTray, destroyTray } from './tray'
-import { initAutoUpdater, checkForUpdates, installUpdate } from './updater'
+import { initAutoUpdater, checkForUpdates, downloadUpdate } from './updater'
 import { initDatabase, closeDatabase } from './db/client'
 import { createTarget, listTargets } from './db/targets'
 import { savePingRollup, getPingHistory, type RawPingSample } from './db/ping-history'
@@ -41,7 +41,7 @@ let rollupFlushTimer: ReturnType<typeof setInterval> | null = null
 const ROLLUP_FLUSH_INTERVAL_MS = 60_000
 
 /**
- * The actual monitoring service: one ping loop (every 2s) + one traceroute
+ * The actual monitoring service: one ping loop (every 1s) + one traceroute
  * loop (every 30s) per target, real OS probes via `ping`/`tracert`/
  * `traceroute`. Runs independently of any window - hiding it to the tray,
  * or closing it on macOS, doesn't stop monitoring, only quitting the app does.
@@ -252,9 +252,9 @@ function registerIpcHandlers(): void {
     checkForUpdates()
   })
 
-  ipcMain.on(IpcChannels.UpdateInstall, (event) => {
+  ipcMain.on(IpcChannels.UpdateDownload, (event) => {
     assertTrustedSender(event.senderFrame)
-    installUpdate()
+    downloadUpdate()
   })
 }
 

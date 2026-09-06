@@ -26,7 +26,10 @@ function send(event: UpdateStatusEvent): void {
 export function initAutoUpdater(windowGetter: () => BrowserWindow | null): void {
   getWindow = windowGetter
 
-  autoUpdater.autoDownload = true
+  // Downloading is only ever user-initiated (the renderer's Update/Cancel
+  // dialog), never silent - so a slow/metered connection is never spent
+  // without asking first.
+  autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = false
 
   autoUpdater.on('checking-for-update', () => send({ state: 'checking' }))
@@ -35,7 +38,13 @@ export function initAutoUpdater(windowGetter: () => BrowserWindow | null): void 
   autoUpdater.on('download-progress', (progress) =>
     send({ state: 'downloading', percent: Math.round(progress.percent) })
   )
-  autoUpdater.on('update-downloaded', (info) => send({ state: 'downloaded', version: info.version }))
+  autoUpdater.on('update-downloaded', (info) => {
+    send({ state: 'downloaded', version: info.version })
+    // The dialog's "Update" button is the only thing that ever starts a
+    // download, so reaching here always means the user already asked for
+    // this - no second "restart now?" prompt, just do it.
+    autoUpdater.quitAndInstall()
+  })
   autoUpdater.on('error', (error) => send({ state: 'error', message: error.message }))
 
   if (canCheckForUpdates()) {
@@ -51,7 +60,7 @@ export function checkForUpdates(): void {
   }
 }
 
-/** Quits and restarts the app into the already-downloaded update. */
-export function installUpdate(): void {
-  autoUpdater.quitAndInstall()
+/** Starts downloading the update the last `update-available` event described. */
+export function downloadUpdate(): void {
+  void autoUpdater.downloadUpdate()
 }

@@ -3,6 +3,7 @@ import type { CreateTargetInput } from '../../../shared/types'
 import type { TargetWithStatus } from '../App'
 
 interface SidebarProps {
+  isOpen: boolean
   targets: TargetWithStatus[]
   selectedTargetId: string | null
   onSelectTarget: (id: string) => void
@@ -13,6 +14,7 @@ interface SidebarProps {
 }
 
 function Sidebar({
+  isOpen,
   targets,
   selectedTargetId,
   onSelectTarget,
@@ -33,7 +35,7 @@ function Sidebar({
   }
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isOpen ? '' : 'sidebar--closed'}`} aria-hidden={!isOpen}>
       <h2 className="sidebar-title">Monitored Targets</h2>
 
       {error && <p className="sidebar-error">{error}</p>}

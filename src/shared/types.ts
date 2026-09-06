@@ -27,11 +27,11 @@ export interface HopSample {
 }
 
 /**
- * One live sample, broadcast once per target every ~2 seconds by the
+ * One live sample, broadcast once per target every ~1 second by the
  * network engine (`src/main/network/engine.ts`). Aggregates the fresh
  * end-to-end ping with the most recently known traceroute path - hop
  * discovery runs on its own slower cadence (real traceroutes take far
- * longer than 2s), so `hops`/`hopsCapturedAt` describe the latest completed
+ * longer than 1s), so `hops`/`hopsCapturedAt` describe the latest completed
  * run, not a fresh one for every sample.
  */
 export interface NetworkUpdate {
@@ -103,8 +103,9 @@ export interface CreateAlertRuleInput {
 
 /**
  * Lifecycle of the app's self-update check, broadcast from main to renderer.
- * `available`'s `version` is what to show; `downloaded` means
- * `installUpdate()` can now restart into it.
+ * `available`'s `version` is what the Update/Cancel dialog shows; `download
+ * Update()` moves it into `downloading`, and `downloaded` is momentary -
+ * main quits and restarts into the update as soon as it fires.
  */
 export type UpdateStatusEvent =
   | { state: 'checking' }
@@ -130,6 +131,6 @@ export interface ExposedApi {
   deleteAlertRule: (id: string) => Promise<void>
   onNetworkUpdate: (callback: (update: NetworkUpdate) => void) => () => void
   checkForUpdates: () => void
-  installUpdate: () => void
+  downloadUpdate: () => void
   onUpdateStatus: (callback: (event: UpdateStatusEvent) => void) => () => void
 }
