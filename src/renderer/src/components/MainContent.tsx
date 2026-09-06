@@ -1,6 +1,7 @@
 import type { NetworkUpdate, PingHistoryRecord } from '../../../shared/types'
 import type { TargetWithStatus } from '../App'
 import TimelineChart from './TimelineChart'
+import PathVisualization from './PathVisualization'
 import RouteTable from './RouteTable'
 import AlertRules from './AlertRules'
 
@@ -71,6 +72,8 @@ function MainContent({
             <h2>Latency &amp; Packet Loss (last 10 min)</h2>
             <TimelineChart key={target.id} updates={liveUpdates} />
           </section>
+
+          <PathVisualization key={`path-${target.id}`} updates={liveUpdates} targetName={target.name} />
 
           <RouteTable key={target.id} updates={liveUpdates} />
 

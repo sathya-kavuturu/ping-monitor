@@ -88,3 +88,21 @@ export function buildRouteTable(updates: NetworkUpdate[]): RouteTable {
     latestCapturedAt: recentCapturedAts[recentCapturedAts.length - 1]
   }
 }
+
+/**
+ * Four-state status for one route hop - a superset of the sidebar's
+ * three-tier status because a router that never answers traceroute probes
+ * ('silent') is extremely common and NOT the same problem as one that's
+ * demonstrably dropping the packets it does see ('offline'). Conflating
+ * them would paint most real-world paths solid red for no reason - MTR/
+ * WinMTR make the same distinction.
+ */
+export type HopVisualStatus = 'online' | 'degraded' | 'offline' | 'silent'
+
+export function hopStatus(row: RouteRow): HopVisualStatus {
+  if (row.address === null) return 'silent'
+  if (row.lossPercent >= 20) return 'offline'
+  if (row.lossPercent > 0) return 'degraded'
+  if (row.latencyMs !== null && row.latencyMs > 150) return 'degraded'
+  return 'online'
+}
