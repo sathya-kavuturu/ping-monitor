@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { NetworkUpdate } from '../../../shared/types'
 import { buildRouteTable } from '../lib/route-table'
+import Sparkline from './Sparkline'
 
 interface RouteTableProps {
   updates: NetworkUpdate[]
@@ -42,6 +43,7 @@ function RouteTable({ updates }: RouteTableProps): React.JSX.Element {
             <th>Address</th>
             <th>Latency</th>
             <th>Loss</th>
+            <th>Trend</th>
           </tr>
         </thead>
         <tbody>
@@ -64,11 +66,14 @@ function RouteTable({ updates }: RouteTableProps): React.JSX.Element {
                   <span>{row.lossPercent}%</span>
                 </div>
               </td>
+              <td>
+                <Sparkline values={row.trend} />
+              </td>
             </tr>
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={4} className="feed-empty">
+              <td colSpan={5} className="feed-empty">
                 No traceroute data yet.
               </td>
             </tr>

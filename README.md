@@ -89,17 +89,17 @@ src/
 
 ## IPC contract
 
-| Direction | Channel | Renderer API | Payload |
-|---|---|---|---|
-| renderer → main | `targets:list` | `window.api.getTargets()` | `Target[]` |
-| renderer → main | `targets:create` | `window.api.createTarget(input)` | `Target` |
-| renderer → main | `ping-history:list` | `window.api.getPingHistory(query)` | `PingHistoryRecord[]` |
-| renderer → main | `hop-history:list` | `window.api.getHopHistory(query)` | `HopRecord[]` (available, currently unused by the UI - see Route Table below) |
-| renderer → main | `alert-rules:list` | `window.api.getAlertRules(targetId)` | `AlertRule[]` |
-| renderer → main | `alert-rules:create` | `window.api.createAlertRule(input)` | `AlertRule` |
-| renderer → main | `alert-rules:set-enabled` | `window.api.setAlertRuleEnabled(id, enabled)` | `AlertRule` |
-| renderer → main | `alert-rules:delete` | `window.api.deleteAlertRule(id)` | `void` |
-| main → renderer | `network:update` | `window.api.onNetworkUpdate(cb)` | `NetworkUpdate` (per target, every ~1s) |
+| Direction       | Channel                   | Renderer API                                  | Payload                                                                       |
+| --------------- | ------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------- |
+| renderer → main | `targets:list`            | `window.api.getTargets()`                     | `Target[]`                                                                    |
+| renderer → main | `targets:create`          | `window.api.createTarget(input)`              | `Target`                                                                      |
+| renderer → main | `ping-history:list`       | `window.api.getPingHistory(query)`            | `PingHistoryRecord[]`                                                         |
+| renderer → main | `hop-history:list`        | `window.api.getHopHistory(query)`             | `HopRecord[]` (available, currently unused by the UI - see Route Table below) |
+| renderer → main | `alert-rules:list`        | `window.api.getAlertRules(targetId)`          | `AlertRule[]`                                                                 |
+| renderer → main | `alert-rules:create`      | `window.api.createAlertRule(input)`           | `AlertRule`                                                                   |
+| renderer → main | `alert-rules:set-enabled` | `window.api.setAlertRuleEnabled(id, enabled)` | `AlertRule`                                                                   |
+| renderer → main | `alert-rules:delete`      | `window.api.deleteAlertRule(id)`              | `void`                                                                        |
+| main → renderer | `network:update`          | `window.api.onNetworkUpdate(cb)`              | `NetworkUpdate` (per target, every ~1s)                                       |
 
 `onNetworkUpdate` subscribes to a push stream the `NetworkEngine` drives (see below) and returns
 an unsubscribe function so React components can clean up listeners on unmount.
@@ -157,7 +157,7 @@ pair per target - no shared "tick" loop - so a slow probe on one target never de
   its own next attempt indefinitely.
 
 Every `NetworkUpdate` therefore aggregates two data sources at different freshness: a live ping
-from *this* tick, plus the most recently completed traceroute's hops (`hops`/`hopsCapturedAt`
+from _this_ tick, plus the most recently completed traceroute's hops (`hops`/`hopsCapturedAt`
 tell the UI how stale that path is). `onSample`/`onTraceroute` callbacks (wired in
 `src/main/index.ts`) are the engine's only way out - it never touches IPC or Prisma directly, so
 it's easy to unit-test or swap the probes for something else (e.g. an SNMP poller) later.
@@ -179,7 +179,7 @@ renders as a gap in the line - loss is visible directly, for free) and **packet 
 axis; `chart-data.ts` computes this as a rolling percentage over the trailing ~15 samples, since
 a raw per-sample 0/100 signal is too spiky to read as a trend).
 
-**Route table** (`RouteTable.tsx`) is deliberately *not* a plain dump of the latest traceroute.
+**Route table** (`RouteTable.tsx`) is deliberately _not_ a plain dump of the latest traceroute.
 `route-table.ts` scans the same buffer for distinct completed runs (a change in `hopsCapturedAt`
 marks a new one), keeps the last 10, and aggregates them into one row per hop number - address/
 hostname/latency from the most recent run that got a reply, and a **loss %** = the fraction of
@@ -204,8 +204,8 @@ stays breached (not on every 1s tick), plus once more on breached -> OK ("recove
 watchdog only ever calls back into `onAlert` - it doesn't know `Notification` exists.
 
 `notifyAlertEvent` (`notifications.ts`) turns that callback into Electron's native `Notification`
-API (Action Center / Notification Center / libnotify, depending on OS) - e.g. *"Alert: Office
-Router - Packet loss is 12%, above your 5% threshold."* Clicking a notification calls back into
+API (Action Center / Notification Center / libnotify, depending on OS) - e.g. _"Alert: Office
+Router - Packet loss is 12%, above your 5% threshold."_ Clicking a notification calls back into
 `src/main/index.ts` to restore the window, whether it's hidden in the tray or just unfocused.
 Every alert/recovery is also logged to console (`[watchdog] ...`) regardless of whether the OS
 notification renders - a lightweight audit trail independent of the platform's toast system.

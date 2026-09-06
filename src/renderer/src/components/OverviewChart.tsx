@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import type { NetworkUpdate } from '../../../shared/types'
 import type { TargetWithStatus } from '../App'
 import { buildOverviewChartData } from '../lib/overview-chart'
-import { CHART_WINDOW_MS } from '../lib/chart-data'
+import { DEFAULT_RANGE_MS } from '../lib/chart-data'
+import TimeRangeControls from './TimeRangeControls'
 
 interface OverviewChartProps {
   targets: TargetWithStatus[]
@@ -61,7 +62,10 @@ function buildOptions(width: number, height: number, labels: string[]): uPlot.Op
       }))
     ],
     legend: { show: true },
-    cursor: { drag: { x: false, y: false } }
+    // Drag-select on the x-axis zooms into that range (uPlot's built-in
+    // cursor.drag.setScale, on by default) - `TimeRangeControls`' "Reset
+    // zoom" button (`fitToRange`) is the way back out.
+    cursor: { drag: { x: true, y: false } }
   }
 }
 
@@ -74,6 +78,7 @@ function buildOptions(width: number, height: number, labels: string[]): uPlot.Op
 function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const plotRef = useRef<uPlot | null>(null)
+  const [rangeMs, setRangeMs] = useState(DEFAULT_RANGE_MS)
 
   // Rebuild only when the SET of targets changes (series count/labels/
   // colors depend on it) - not on every ~1s data tick.
@@ -111,9 +116,23 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
   }, [targetsKey])
 
   useEffect(() => {
-    const { xs, series } = buildOverviewChartData(targets, updatesByTarget, CHART_WINDOW_MS)
-    plotRef.current?.setData([xs, ...series.map((s) => s.latency)])
-  }, [targets, updatesByTarget, targetsKey])
+    const { xs, series } = buildOverviewChartData(targets, updatesByTarget, rangeMs)
+    // resetScales: false - a manual drag-zoom (see cursor.drag above) must
+    // survive the next ~1s data tick; only an explicit range change or
+    // "Reset zoom" click should re-fit the x-axis (see fitToRange).
+    plotRef.current?.setData([xs, ...series.map((s) => s.latency)], false)
+  }, [targets, updatesByTarget, targetsKey, rangeMs])
+
+  const fitToRange = (): void => {
+    const plot = plotRef.current
+    if (!plot) return
+    const now = Date.now()
+    plot.setScale('x', { min: Math.floor((now - rangeMs) / 1000), max: Math.floor(now / 1000) })
+  }
+
+  // Re-fit whenever the selected preset (or the target set, which rebuilds
+  // the plot instance above) changes - not on every data tick.
+  useEffect(fitToRange, [rangeMs, targetsKey])
 
   return (
     <main className="main-content">
@@ -122,7 +141,16 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
       </header>
 
       <section className="feed">
-        <h2>All Targets - Latency (last 10 min)</h2>
+        <div className="feed-header-row">
+          <h2>All Targets - Latency</h2>
+          {targets.length > 0 && (
+            <TimeRangeControls
+              rangeMs={rangeMs}
+              onSelectRange={setRangeMs}
+              onResetZoom={fitToRange}
+            />
+          )}
+        </div>
         {targets.length === 0 ? (
           <p className="feed-empty">Add a target to see its latency here.</p>
         ) : (

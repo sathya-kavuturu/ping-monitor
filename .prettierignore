@@ -1,0 +1,6 @@
+node_modules
+out
+dist
+dist-electron
+src/generated
+package-lock.json

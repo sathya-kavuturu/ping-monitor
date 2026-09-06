@@ -10,6 +10,7 @@ import type {
   PingHistoryQuery
 } from '../shared/types'
 import { NetworkEngine } from './network/engine'
+import { resolveHostname } from './network/forward-dns'
 import { AlertWatchdog } from './alerting/watchdog'
 import { notifyAlertEvent } from './alerting/notifications'
 import { createTray, destroyTray } from './tray'
@@ -219,6 +220,11 @@ function registerIpcHandlers(): void {
     // to drop them, not just stop pinging the target.
     await refreshCurrentTargets()
     await refreshAlertRules()
+  })
+
+  ipcMain.handle(IpcChannels.ResolveHostname, async (event, host: string) => {
+    assertTrustedSender(event.senderFrame)
+    return resolveHostname(host)
   })
 
   ipcMain.handle(IpcChannels.PingHistoryList, async (event, query: PingHistoryQuery) => {

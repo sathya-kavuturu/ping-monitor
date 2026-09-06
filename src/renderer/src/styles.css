@@ -177,6 +177,13 @@ body {
   border-color: var(--accent);
 }
 
+.resolved-ip-hint {
+  margin: -4px 0 0;
+  padding: 0 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .update-progress-track {
   height: 6px;
   border-radius: 999px;
@@ -430,6 +437,12 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.stat-value-sub {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
 .sidebar-subtitle {
   font-size: 12px;
   text-transform: uppercase;
@@ -499,6 +512,49 @@ body {
 .refresh-btn:hover {
   color: var(--text);
   border-color: var(--accent);
+}
+
+.time-range-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.time-range-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  padding: 4px 9px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.time-range-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.time-range-btn--active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.time-range-reset-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 4px 6px;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+  margin-left: 4px;
+}
+
+.time-range-reset-btn:hover {
+  color: var(--text);
 }
 
 .feed h2 {
@@ -596,6 +652,14 @@ body {
   background: var(--offline);
 }
 
+.sparkline {
+  display: block;
+}
+
+.sparkline-empty {
+  color: var(--text-muted);
+}
+
 .alert-rule-list {
   list-style: none;
   margin: 0 0 12px;
@@ -683,21 +747,39 @@ body {
   cursor: default;
 }
 
-.path-highlight-note {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin: -4px 0 14px;
-}
-
 .path-viz-scroll {
   overflow-x: auto;
   padding: 4px 0 20px;
 }
 
 .path-viz {
+  position: relative;
   display: flex;
   align-items: center;
+  gap: 56px;
   min-width: max-content;
+  padding: 10px 0;
+}
+
+.path-edges {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.path-column {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-shrink: 0;
 }
 
 .path-node {
@@ -708,6 +790,22 @@ body {
   gap: 8px;
   flex-shrink: 0;
   width: 92px;
+}
+
+.path-node--branch .path-node-dot {
+  box-shadow:
+    0 0 0 1px var(--border),
+    0 0 0 3px var(--bg);
+}
+
+.path-node-branch-tag {
+  font-size: 9px;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 6px;
+  white-space: nowrap;
 }
 
 .path-node-dot {
@@ -727,28 +825,6 @@ body {
 .path-node-dot.status-silent {
   background: var(--bg-elevated) !important;
   box-shadow: 0 0 0 1px var(--text-muted);
-}
-
-.path-node--flagged .path-node-dot {
-  box-shadow:
-    0 0 0 1px var(--offline),
-    0 0 0 4px rgba(230, 84, 62, 0.25);
-}
-
-.path-node-badge {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--offline);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 14px;
-  text-align: center;
-  box-shadow: 0 0 0 2px var(--bg);
 }
 
 .path-node-dot--mini {
@@ -816,51 +892,4 @@ body {
 .path-tooltip-row span:last-child {
   color: var(--text);
   font-variant-numeric: tabular-nums;
-}
-
-.path-tooltip-bad {
-  color: var(--offline) !important;
-  font-weight: 600;
-}
-
-.path-segment {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.path-edge {
-  position: relative;
-  width: 56px;
-  height: 3px;
-  border-radius: 999px;
-  background: var(--online);
-  flex-shrink: 0;
-}
-
-.path-edge--degraded {
-  background: var(--degraded);
-}
-
-.path-edge--offline {
-  height: 3px;
-  background: var(--offline);
-}
-
-.path-edge--silent {
-  height: 2px;
-  opacity: 0.5;
-  background-image: linear-gradient(90deg, var(--text-muted) 50%, transparent 50%);
-  background-size: 8px 2px;
-  background-color: transparent;
-}
-
-.path-edge-label {
-  position: absolute;
-  top: -18px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 10px;
-  color: var(--text-muted);
-  white-space: nowrap;
 }

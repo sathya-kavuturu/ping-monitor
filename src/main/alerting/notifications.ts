@@ -22,7 +22,8 @@ export function notifyAlertEvent(event: AlertEvent, onClick: () => void): void {
   const thresholdText = formatValue(event.rule.metric, event.rule.thresholdValue)
   const valueText = formatValue(event.rule.metric, event.currentValue)
 
-  const title = event.kind === 'triggered' ? `Alert: ${event.target.name}` : `Recovered: ${event.target.name}`
+  const title =
+    event.kind === 'triggered' ? `Alert: ${event.target.name}` : `Recovered: ${event.target.name}`
   const body =
     event.kind === 'triggered'
       ? `${metricLabel} is ${valueText}, above your ${thresholdText} threshold.`

@@ -1,8 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import type { NetworkUpdate } from '../../../shared/types'
 import { buildChartSeries } from '../lib/chart-data'
+import { DEFAULT_RANGE_MS } from '../lib/chart-data'
+import TimeRangeControls from './TimeRangeControls'
 
 interface TimelineChartProps {
   updates: NetworkUpdate[]
@@ -67,7 +69,10 @@ function buildOptions(width: number, height: number): uPlot.Options {
       }
     ],
     legend: { show: true },
-    cursor: { drag: { x: false, y: false } }
+    // Drag-select on the x-axis zooms into that range (uPlot's built-in
+    // cursor.drag.setScale, on by default) - `TimeRangeControls`' "Reset
+    // zoom" button (`fitToRange`) is the way back out.
+    cursor: { drag: { x: true, y: false } }
   }
 }
 
@@ -75,18 +80,23 @@ function buildOptions(width: number, height: number): uPlot.Options {
  * Thin React wrapper around uPlot (canvas-based, not React-native) - create
  * the instance once, then push new data/size into it imperatively via
  * `setData`/`setSize` rather than re-rendering the DOM every tick. That's
- * what makes it viable to redraw on every ~2s sample without jank.
+ * what makes it viable to redraw on every ~1s sample without jank.
  */
 function TimelineChart({ updates }: TimelineChartProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const plotRef = useRef<uPlot | null>(null)
+  const [rangeMs, setRangeMs] = useState(DEFAULT_RANGE_MS)
 
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
     const { width, height } = container.getBoundingClientRect()
-    const plot = new uPlot(buildOptions(Math.max(width, 1), Math.max(height, 1)), [[], [], []], container)
+    const plot = new uPlot(
+      buildOptions(Math.max(width, 1), Math.max(height, 1)),
+      [[], [], []],
+      container
+    )
     plotRef.current = plot
 
     const resizeObserver = new ResizeObserver((entries) => {
@@ -105,11 +115,34 @@ function TimelineChart({ updates }: TimelineChartProps): React.JSX.Element {
   }, [])
 
   useEffect(() => {
-    const series = buildChartSeries(updates)
-    plotRef.current?.setData([series.xs, series.latency, series.lossPercent])
-  }, [updates])
+    const cutoff = Date.now() - rangeMs
+    const inRange = updates.filter((update) => update.timestamp >= cutoff)
+    const series = buildChartSeries(inRange)
+    // resetScales: false - a manual drag-zoom (see cursor.drag above) must
+    // survive the next ~1s data tick; only an explicit range change or
+    // "Reset zoom" click should re-fit the x-axis (see fitToRange).
+    plotRef.current?.setData([series.xs, series.latency, series.lossPercent], false)
+  }, [updates, rangeMs])
 
-  return <div ref={containerRef} className="timeline-chart" />
+  const fitToRange = (): void => {
+    const plot = plotRef.current
+    if (!plot) return
+    const now = Date.now()
+    plot.setScale('x', { min: Math.floor((now - rangeMs) / 1000), max: Math.floor(now / 1000) })
+  }
+
+  // Re-fit whenever the selected preset changes (not on every data tick).
+  useEffect(fitToRange, [rangeMs])
+
+  return (
+    <section className="feed">
+      <div className="feed-header-row">
+        <h2>Latency &amp; Packet Loss</h2>
+        <TimeRangeControls rangeMs={rangeMs} onSelectRange={setRangeMs} onResetZoom={fitToRange} />
+      </div>
+      <div ref={containerRef} className="timeline-chart" />
+    </section>
+  )
 }
 
 export default TimelineChart

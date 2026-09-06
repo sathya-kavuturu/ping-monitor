@@ -28,7 +28,7 @@ function buildCommand(host: string): { command: string; args: string[] } {
   }
 }
 
-function parseUnixLine(line: string): HopSample | null {
+export function parseUnixLine(line: string): HopSample | null {
   const trimmed = line.trim()
   const match = trimmed.match(/^(\d+)\s+(.*)$/)
   if (!match) return null
@@ -65,7 +65,7 @@ function parseUnixLine(line: string): HopSample | null {
   return { hopNumber, address, hostname, latencyMs }
 }
 
-function parseWindowsLine(line: string): HopSample | null {
+export function parseWindowsLine(line: string): HopSample | null {
   const trimmed = line.trim()
   const match = trimmed.match(/^(\d+)\s+(.*)$/)
   if (!match) return null

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { NetworkUpdate, PingHistoryRecord } from '../../../shared/types'
 import type { TargetWithStatus } from '../App'
 import TimelineChart from './TimelineChart'
@@ -35,13 +36,33 @@ function MainContent({
 }: MainContentProps): React.JSX.Element {
   const latest = liveUpdates[liveUpdates.length - 1]
 
+  // Forward-resolved just for display (e.g. "example.com (93.184.216.34)")
+  // - the target keeps monitoring whatever host it was created with.
+  const [resolvedIp, setResolvedIp] = useState<string | null>(null)
+  useEffect(() => {
+    setResolvedIp(null)
+    if (!target) return
+    let cancelled = false
+    window.api
+      .resolveHostname(target.host)
+      .then((ip) => {
+        if (!cancelled) setResolvedIp(ip)
+      })
+      .catch(() => {
+        if (!cancelled) setResolvedIp(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [target])
+
+  const showResolvedIp = resolvedIp !== null && target !== null && resolvedIp !== target.host
+
   return (
     <main className="main-content">
       <header className="main-header">
         <h1>{target ? target.name : 'Select a target'}</h1>
-        {target && (
-          <span className={`status-badge status-${target.status}`}>{target.status}</span>
-        )}
+        {target && <span className={`status-badge status-${target.status}`}>{target.status}</span>}
       </header>
 
       {target && (
@@ -49,7 +70,10 @@ function MainContent({
           <section className="stat-grid">
             <div className="stat-card">
               <span className="stat-label">Host</span>
-              <span className="stat-value">{target.host}</span>
+              <span className="stat-value">
+                {target.host}
+                {showResolvedIp && <span className="stat-value-sub"> ({resolvedIp})</span>}
+              </span>
             </div>
             <div className="stat-card">
               <span className="stat-label">Latency</span>
@@ -65,14 +89,15 @@ function MainContent({
             </div>
           </section>
 
-          <section className="feed">
-            <h2>Latency &amp; Packet Loss (last 10 min)</h2>
-            <TimelineChart key={target.id} updates={liveUpdates} />
-          </section>
+          <TimelineChart key={`timeline-${target.id}`} updates={liveUpdates} />
 
-          <PathVisualization key={`path-${target.id}`} updates={liveUpdates} targetName={target.name} />
+          <PathVisualization
+            key={`path-${target.id}`}
+            updates={liveUpdates}
+            targetName={target.name}
+          />
 
-          <RouteTable key={target.id} updates={liveUpdates} />
+          <RouteTable key={`route-${target.id}`} updates={liveUpdates} />
 
           <section className="feed">
             <div className="feed-header-row">
@@ -110,7 +135,8 @@ function MainContent({
                 {pingHistory.length === 0 && (
                   <tr>
                     <td colSpan={6} className="feed-empty">
-                      No rollups yet - the first one lands about a minute after this target is added.
+                      No rollups yet - the first one lands about a minute after this target is
+                      added.
                     </td>
                   </tr>
                 )}

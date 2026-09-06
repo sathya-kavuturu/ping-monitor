@@ -33,3 +33,7 @@ publish:
   provider: github
   owner: sathya-kavuturu
   repo: secure-electron-monitor
+  # Publish straight to a visible release instead of electron-builder's
+  # default draft, so a tag push finishes as a live GitHub release with no
+  # manual "publish" click needed.
+  releaseType: release

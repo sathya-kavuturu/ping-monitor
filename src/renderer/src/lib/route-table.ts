@@ -1,6 +1,34 @@
 import type { HopSample, NetworkUpdate } from '../../../shared/types'
 
-const MAX_RUNS = 10
+const MAX_RUNS = 20
+
+export interface TraceRun {
+  capturedAt: number
+  hops: HopSample[]
+}
+
+/**
+ * Reconstructs the last few completed traceroute runs from a target's live
+ * update buffer - the engine repeats the same `hops`/`hopsCapturedAt` across
+ * many consecutive samples until the next run finishes, so a change in
+ * `hopsCapturedAt` marks a new run. Shared by `buildRouteTable` (aggregate
+ * stats + per-hop trend) and `buildPathGraph` (branch/merge topology) so
+ * both work off the exact same run history.
+ */
+export function collectRuns(updates: NetworkUpdate[], maxRuns: number = MAX_RUNS): TraceRun[] {
+  const runsByCapturedAt = new Map<number, HopSample[]>()
+
+  for (const update of updates) {
+    if (update.hopsCapturedAt !== null && update.hops.length > 0) {
+      runsByCapturedAt.set(update.hopsCapturedAt, update.hops)
+    }
+  }
+
+  const capturedAts = Array.from(runsByCapturedAt.keys()).sort((a, b) => a - b)
+  return capturedAts
+    .slice(-maxRuns)
+    .map((capturedAt) => ({ capturedAt, hops: runsByCapturedAt.get(capturedAt)! }))
+}
 
 export interface RouteRow {
   hopNumber: number
@@ -10,6 +38,8 @@ export interface RouteRow {
   latencyMs: number | null
   /** % of retained runs where this hop didn't reply, 0-100. */
   lossPercent: number
+  /** One entry per retained run, oldest first - `null` = lost/silent that run. Feeds the route table's trend sparkline. */
+  trend: (number | null)[]
 }
 
 export interface RouteTable {
@@ -21,25 +51,13 @@ export interface RouteTable {
 }
 
 /**
- * Reconstructs the last few completed traceroute runs from a target's live
- * update buffer (the engine repeats the same `hops`/`hopsCapturedAt` across
- * many consecutive samples until the next run finishes, so a change in
- * `hopsCapturedAt` marks a new run) and aggregates them into one row per hop
- * number with a per-hop loss percentage across those runs - the same idea
- * as MTR/WinMTR, computed entirely client-side from the IPC stream.
+ * Aggregates the last few completed traceroute runs (see `collectRuns`) into
+ * one row per hop number with a per-hop loss percentage across those runs -
+ * the same idea as MTR/WinMTR, computed entirely client-side from the IPC
+ * stream.
  */
 export function buildRouteTable(updates: NetworkUpdate[]): RouteTable {
-  const runsByCapturedAt = new Map<number, HopSample[]>()
-
-  for (const update of updates) {
-    if (update.hopsCapturedAt !== null && update.hops.length > 0) {
-      runsByCapturedAt.set(update.hopsCapturedAt, update.hops)
-    }
-  }
-
-  const capturedAts = Array.from(runsByCapturedAt.keys()).sort((a, b) => a - b)
-  const recentCapturedAts = capturedAts.slice(-MAX_RUNS)
-  const runs = recentCapturedAts.map((capturedAt) => runsByCapturedAt.get(capturedAt)!)
+  const runs = collectRuns(updates)
 
   if (runs.length === 0) {
     return { rows: [], runCount: 0, latestCapturedAt: null }
@@ -47,7 +65,7 @@ export function buildRouteTable(updates: NetworkUpdate[]): RouteTable {
 
   const hopNumbers = new Set<number>()
   for (const run of runs) {
-    for (const hop of run) hopNumbers.add(hop.hopNumber)
+    for (const hop of run.hops) hopNumbers.add(hop.hopNumber)
   }
 
   const rows: RouteRow[] = Array.from(hopNumbers)
@@ -58,9 +76,11 @@ export function buildRouteTable(updates: NetworkUpdate[]): RouteTable {
       let address: string | null = null
       let hostname: string | null = null
       let latencyMs: number | null = null
+      const trend: (number | null)[] = []
 
       for (const run of runs) {
-        const hop = run.find((h) => h.hopNumber === hopNumber)
+        const hop = run.hops.find((h) => h.hopNumber === hopNumber)
+        trend.push(hop?.latencyMs ?? null)
         if (!hop) continue
 
         seenCount += 1
@@ -78,14 +98,15 @@ export function buildRouteTable(updates: NetworkUpdate[]): RouteTable {
         address,
         hostname,
         latencyMs,
-        lossPercent: seenCount > 0 ? Math.round((lostCount / seenCount) * 100) : 0
+        lossPercent: seenCount > 0 ? Math.round((lostCount / seenCount) * 100) : 0,
+        trend
       }
     })
 
   return {
     rows,
     runCount: runs.length,
-    latestCapturedAt: recentCapturedAts[recentCapturedAts.length - 1]
+    latestCapturedAt: runs[runs.length - 1].capturedAt
   }
 }
 
@@ -99,7 +120,9 @@ export function buildRouteTable(updates: NetworkUpdate[]): RouteTable {
  */
 export type HopVisualStatus = 'online' | 'degraded' | 'offline' | 'silent'
 
-export function hopStatus(row: RouteRow): HopVisualStatus {
+export function hopStatus(
+  row: Pick<RouteRow, 'address' | 'lossPercent' | 'latencyMs'>
+): HopVisualStatus {
   if (row.address === null) return 'silent'
   if (row.lossPercent >= 20) return 'offline'
   if (row.lossPercent > 0) return 'degraded'

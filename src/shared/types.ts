@@ -125,6 +125,8 @@ export interface ExposedApi {
   createTarget: (input: CreateTargetInput) => Promise<Target>
   /** Cascade-deletes the target's ping history, hop history, and alert rules too. */
   deleteTarget: (id: string) => Promise<void>
+  /** Resolves a DNS name (or IP literal, returned unchanged) to an IP address, or `null` if it can't be resolved. */
+  resolveHostname: (host: string) => Promise<string | null>
   getPingHistory: (query: PingHistoryQuery) => Promise<PingHistoryRecord[]>
   getHopHistory: (query: HopHistoryQuery) => Promise<HopRecord[]>
   /** Omit `targetId` to list alert rules across every target (used by the consolidated Alerts view). */

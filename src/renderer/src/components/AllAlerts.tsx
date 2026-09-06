@@ -6,7 +6,12 @@ interface AllAlertsProps {
   targets: TargetWithStatus[]
 }
 
-const METRIC_OPTIONS: Array<{ value: AlertMetric; label: string; unit: string; placeholder: string }> = [
+const METRIC_OPTIONS: Array<{
+  value: AlertMetric
+  label: string
+  unit: string
+  placeholder: string
+}> = [
   { value: 'packet_loss', label: 'Packet loss', unit: '%', placeholder: '5' },
   { value: 'latency', label: 'Latency', unit: 'ms', placeholder: '200' }
 ]
@@ -116,7 +121,9 @@ function AllAlerts({ targets }: AllAlertsProps): React.JSX.Element {
 
       {loadError && <p className="sidebar-error">{loadError}</p>}
 
-      {targets.length === 0 && <p className="feed-empty">Add a target to configure alerts for it.</p>}
+      {targets.length === 0 && (
+        <p className="feed-empty">Add a target to configure alerts for it.</p>
+      )}
 
       {targets.map((target) => {
         const targetRules = rulesByTarget.get(target.id) ?? []
@@ -139,7 +146,9 @@ function AllAlerts({ targets }: AllAlertsProps): React.JSX.Element {
                       type="checkbox"
                       checked={rule.enabled}
                       onChange={() => handleToggle(rule)}
-                      title={rule.enabled ? 'Enabled - click to disable' : 'Disabled - click to enable'}
+                      title={
+                        rule.enabled ? 'Enabled - click to disable' : 'Disabled - click to enable'
+                      }
                     />
                     <span className="alert-rule-text">
                       {meta.label} &gt; {rule.thresholdValue}

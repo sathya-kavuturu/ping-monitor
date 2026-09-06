@@ -1,4 +1,4 @@
-import { promises as dns } from 'dns'
+import { Resolver } from 'dns'
 import type { HopSample } from '../../shared/types'
 
 // A hop with no PTR record can otherwise hang for the OS resolver's full
@@ -6,6 +6,22 @@ import type { HopSample } from '../../shared/types'
 // each lookup independently means one unresponsive hop can never delay
 // the others or the traceroute cadence.
 const REVERSE_LOOKUP_TIMEOUT_MS = 1_500
+
+// The OS-configured DNS server (often an ISP resolver) frequently fails to
+// resolve PTR records that a full recursive public resolver handles fine -
+// querying these directly, in order, is what makes rDNS lookups actually
+// reliable here (the same mechanism a "what is this IP" lookup site relies
+// on, without depending on any third-party site).
+const RESOLVER_SERVER_SETS = [
+  ['1.1.1.1', '1.0.0.1'], // Cloudflare
+  ['8.8.8.8', '8.8.4.4'] // Google
+]
+
+const resolvers = RESOLVER_SERVER_SETS.map((servers) => {
+  const resolver = new Resolver()
+  resolver.setServers(servers)
+  return resolver
+})
 
 // Router IPs repeat across traceroute runs for the same target (and often
 // across different targets sharing part of the same path), and reverse DNS
@@ -22,14 +38,27 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
   ])
 }
 
+function reverseLookup(resolver: Resolver, address: string): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    resolver.reverse(address, (error, hostnames) => {
+      if (error) reject(error)
+      else resolve(hostnames)
+    })
+  })
+}
+
 async function resolveOne(address: string): Promise<string | null> {
   const cached = cache.get(address)
   if (cached !== undefined) return cached
 
-  const hostname = await withTimeout(
-    dns.reverse(address).then((names) => names[0] ?? null),
-    REVERSE_LOOKUP_TIMEOUT_MS
-  ).catch(() => null)
+  let hostname: string | null = null
+  for (const resolver of resolvers) {
+    hostname = await withTimeout(
+      reverseLookup(resolver, address).then((names) => names[0] ?? null),
+      REVERSE_LOOKUP_TIMEOUT_MS
+    ).catch(() => null)
+    if (hostname) break
+  }
 
   cache.set(address, hostname)
   return hostname
