@@ -222,7 +222,7 @@ function registerIpcHandlers(): void {
     return getHopHistory(query)
   })
 
-  ipcMain.handle(IpcChannels.AlertRulesList, async (event, targetId: string) => {
+  ipcMain.handle(IpcChannels.AlertRulesList, async (event, targetId?: string) => {
     assertTrustedSender(event.senderFrame)
     return listAlertRules(targetId)
   })

@@ -73,10 +73,6 @@ function parseWindowsLine(line: string): HopSample | null {
   const hopNumber = Number(match[1])
   const rest = match[2]
 
-  if (/Request timed out/i.test(rest)) {
-    return { hopNumber, address: null, hostname: null, latencyMs: null }
-  }
-
   const times: number[] = []
   const timeRegex = /(\d+)\s*ms/gi
   let timeMatch: RegExpExecArray | null
@@ -85,10 +81,20 @@ function parseWindowsLine(line: string): HopSample | null {
     times.push(Number(timeMatch[1]))
   }
 
+  // No "N ms" readings at all means this hop produced a textual error
+  // instead of a reply - "Request timed out.", "Destination host
+  // unreachable.", "Destination net unreachable.", etc. (exact wording
+  // varies by Windows version/locale). Treating "found no timings" as the
+  // one signal for "no reply" - rather than special-casing every possible
+  // message - also avoids the trailing-word address regex below mistaking
+  // a word like "unreachable." itself for an IP address.
+  if (times.length === 0) {
+    return { hopNumber, address: null, hostname: null, latencyMs: null }
+  }
+
   const addressMatch = rest.match(/([A-Za-z0-9.:_-]+)\s*$/)
   const address = addressMatch ? addressMatch[1] : null
-  const latencyMs =
-    times.length > 0 ? times.reduce((sum, value) => sum + value, 0) / times.length : null
+  const latencyMs = times.reduce((sum, value) => sum + value, 0) / times.length
 
   // We run with -d (no DNS resolution) so a hop with no PTR record can't
   // hang the trace - `hostname` is filled in afterward, separately and

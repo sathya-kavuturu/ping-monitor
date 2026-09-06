@@ -125,7 +125,8 @@ export interface ExposedApi {
   createTarget: (input: CreateTargetInput) => Promise<Target>
   getPingHistory: (query: PingHistoryQuery) => Promise<PingHistoryRecord[]>
   getHopHistory: (query: HopHistoryQuery) => Promise<HopRecord[]>
-  getAlertRules: (targetId: string) => Promise<AlertRule[]>
+  /** Omit `targetId` to list alert rules across every target (used by the consolidated Alerts view). */
+  getAlertRules: (targetId?: string) => Promise<AlertRule[]>
   createAlertRule: (input: CreateAlertRuleInput) => Promise<AlertRule>
   setAlertRuleEnabled: (id: string, enabled: boolean) => Promise<AlertRule>
   deleteAlertRule: (id: string) => Promise<void>

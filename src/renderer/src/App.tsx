@@ -9,14 +9,20 @@ import type {
 import { CHART_WINDOW_MS } from './lib/chart-data'
 import Sidebar from './components/Sidebar'
 import MainContent from './components/MainContent'
+import AllAlerts from './components/AllAlerts'
+import OverviewChart from './components/OverviewChart'
 import UpdateDialog from './components/UpdateDialog'
 
 export interface TargetWithStatus extends Target {
   status: TargetStatus
 }
 
+/** Which top-level view fills the main content area, picked from the sidebar. */
+export type MainView = 'target' | 'alerts' | 'overview'
+
 function App(): React.JSX.Element {
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [mainView, setMainView] = useState<MainView>('target')
   const [targets, setTargets] = useState<TargetWithStatus[]>([])
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null)
   // Rolling last-10-minutes buffer per target, ascending by timestamp. Feeds
@@ -89,6 +95,11 @@ function App(): React.JSX.Element {
 
   const handleSelectTarget = useCallback((id: string) => {
     setSelectedTargetId(id)
+    setMainView('target')
+  }, [])
+
+  const handleSelectView = useCallback((view: MainView) => {
+    setMainView(view)
   }, [])
 
   const handleCreateTarget = useCallback(async (input: CreateTargetInput) => {
@@ -134,19 +145,27 @@ function App(): React.JSX.Element {
         isOpen={sidebarOpen}
         targets={targets}
         selectedTargetId={selectedTargetId}
+        mainView={mainView}
         onSelectTarget={handleSelectTarget}
+        onSelectView={handleSelectView}
         onCreateTarget={handleCreateTarget}
         isCreating={isCreating}
         error={loadError}
         createError={createError}
       />
-      <MainContent
-        target={selectedTarget}
-        liveUpdates={liveUpdates}
-        pingHistory={pingHistory}
-        historyError={historyError}
-        onRefreshHistory={handleRefreshHistory}
-      />
+      {mainView === 'target' && (
+        <MainContent
+          target={selectedTarget}
+          liveUpdates={liveUpdates}
+          pingHistory={pingHistory}
+          historyError={historyError}
+          onRefreshHistory={handleRefreshHistory}
+        />
+      )}
+      {mainView === 'alerts' && <AllAlerts targets={targets} />}
+      {mainView === 'overview' && (
+        <OverviewChart targets={targets} updatesByTarget={updatesByTarget} />
+      )}
       <UpdateDialog />
     </div>
   )

@@ -3,7 +3,6 @@ import type { TargetWithStatus } from '../App'
 import TimelineChart from './TimelineChart'
 import PathVisualization from './PathVisualization'
 import RouteTable from './RouteTable'
-import AlertRules from './AlertRules'
 
 interface MainContentProps {
   target: TargetWithStatus | null
@@ -65,8 +64,6 @@ function MainContent({
               <span className="stat-value">{latest ? formatAge(latest.hopsCapturedAt) : '—'}</span>
             </div>
           </section>
-
-          <AlertRules key={target.id} targetId={target.id} />
 
           <section className="feed">
             <h2>Latency &amp; Packet Loss (last 10 min)</h2>

@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from 'react'
 import type { CreateTargetInput } from '../../../shared/types'
-import type { TargetWithStatus } from '../App'
+import type { MainView, TargetWithStatus } from '../App'
 
 interface SidebarProps {
   isOpen: boolean
   targets: TargetWithStatus[]
   selectedTargetId: string | null
+  mainView: MainView
   onSelectTarget: (id: string) => void
+  onSelectView: (view: MainView) => void
   onCreateTarget: (input: CreateTargetInput) => void
   isCreating: boolean
   error: string | null
@@ -17,7 +19,9 @@ function Sidebar({
   isOpen,
   targets,
   selectedTargetId,
+  mainView,
   onSelectTarget,
+  onSelectView,
   onCreateTarget,
   isCreating,
   error,
@@ -36,6 +40,32 @@ function Sidebar({
 
   return (
     <aside className={`sidebar ${isOpen ? '' : 'sidebar--closed'}`} aria-hidden={!isOpen}>
+      <h2 className="sidebar-title">Views</h2>
+      <ul className="target-list">
+        <li>
+          <button
+            type="button"
+            className={`target-item ${mainView === 'alerts' ? 'is-selected' : ''}`}
+            onClick={() => onSelectView('alerts')}
+          >
+            <span className="target-info">
+              <span className="target-name">Alerts</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button
+            type="button"
+            className={`target-item ${mainView === 'overview' ? 'is-selected' : ''}`}
+            onClick={() => onSelectView('overview')}
+          >
+            <span className="target-info">
+              <span className="target-name">Overview</span>
+            </span>
+          </button>
+        </li>
+      </ul>
+
       <h2 className="sidebar-title">Monitored Targets</h2>
 
       {error && <p className="sidebar-error">{error}</p>}
@@ -46,7 +76,9 @@ function Sidebar({
           <li key={target.id}>
             <button
               type="button"
-              className={`target-item ${target.id === selectedTargetId ? 'is-selected' : ''}`}
+              className={`target-item ${
+                mainView === 'target' && target.id === selectedTargetId ? 'is-selected' : ''
+              }`}
               onClick={() => onSelectTarget(target.id)}
             >
               <span className={`status-dot status-${target.status}`} aria-hidden="true" />
