@@ -22,3 +22,8 @@ export async function createTarget(input: CreateTargetInput): Promise<Target> {
 export async function listTargets(): Promise<Target[]> {
   return getPrisma().target.findMany({ orderBy: { createdAt: 'asc' } })
 }
+
+/** Cascade-deletes the target's ping history, hop history, and alert rules too (see schema.prisma). */
+export async function deleteTarget(id: string): Promise<void> {
+  await getPrisma().target.delete({ where: { id } })
+}

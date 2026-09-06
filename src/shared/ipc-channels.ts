@@ -5,6 +5,7 @@
 export const IpcChannels = {
   TargetsList: 'targets:list',
   TargetsCreate: 'targets:create',
+  TargetsDelete: 'targets:delete',
   PingHistoryList: 'ping-history:list',
   HopHistoryList: 'hop-history:list',
   AlertRulesList: 'alert-rules:list',

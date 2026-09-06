@@ -15,7 +15,7 @@ import { notifyAlertEvent } from './alerting/notifications'
 import { createTray, destroyTray } from './tray'
 import { initAutoUpdater, checkForUpdates, downloadUpdate } from './updater'
 import { initDatabase, closeDatabase } from './db/client'
-import { createTarget, listTargets } from './db/targets'
+import { createTarget, deleteTarget, listTargets } from './db/targets'
 import { savePingRollup, getPingHistory, type RawPingSample } from './db/ping-history'
 import { saveHopHistory, getHopHistory } from './db/hop-history'
 import {
@@ -210,6 +210,15 @@ function registerIpcHandlers(): void {
     const target = await createTarget(input)
     await refreshCurrentTargets()
     return target
+  })
+
+  ipcMain.handle(IpcChannels.TargetsDelete, async (event, id: string) => {
+    assertTrustedSender(event.senderFrame)
+    await deleteTarget(id)
+    // Cascade-deleted the target's own alert rules too - the watchdog needs
+    // to drop them, not just stop pinging the target.
+    await refreshCurrentTargets()
+    await refreshAlertRules()
   })
 
   ipcMain.handle(IpcChannels.PingHistoryList, async (event, query: PingHistoryQuery) => {

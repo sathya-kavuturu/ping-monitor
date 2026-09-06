@@ -12,6 +12,8 @@ import MainContent from './components/MainContent'
 import AllAlerts from './components/AllAlerts'
 import OverviewChart from './components/OverviewChart'
 import UpdateDialog from './components/UpdateDialog'
+import AddTargetDialog from './components/AddTargetDialog'
+import ConfirmDialog from './components/ConfirmDialog'
 
 export interface TargetWithStatus extends Target {
   status: TargetStatus
@@ -31,6 +33,10 @@ function App(): React.JSX.Element {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
   const [isCreating, setIsCreating] = useState(false)
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [pendingDeleteTarget, setPendingDeleteTarget] = useState<TargetWithStatus | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const [pingHistory, setPingHistory] = useState<PingHistoryRecord[]>([])
   const [historyError, setHistoryError] = useState<string | null>(null)
@@ -109,12 +115,61 @@ function App(): React.JSX.Element {
       const target = await window.api.createTarget(input)
       setTargets((prev) => [...prev, { ...target, status: 'online' }])
       setSelectedTargetId(target.id)
+      setMainView('target')
+      setIsAddDialogOpen(false)
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : 'Failed to create target')
     } finally {
       setIsCreating(false)
     }
   }, [])
+
+  const handleOpenAddTarget = useCallback(() => {
+    setCreateError(null)
+    setIsAddDialogOpen(true)
+  }, [])
+
+  const handleCloseAddTarget = useCallback(() => {
+    setIsAddDialogOpen(false)
+    setCreateError(null)
+  }, [])
+
+  const handleRequestDeleteTarget = useCallback((target: TargetWithStatus) => {
+    setDeleteError(null)
+    setPendingDeleteTarget(target)
+  }, [])
+
+  const handleCancelDelete = useCallback(() => {
+    setPendingDeleteTarget(null)
+    setDeleteError(null)
+  }, [])
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!pendingDeleteTarget) return
+    const deletedId = pendingDeleteTarget.id
+
+    setIsDeleting(true)
+    setDeleteError(null)
+    try {
+      await window.api.deleteTarget(deletedId)
+      setTargets((prev) => prev.filter((target) => target.id !== deletedId))
+      setUpdatesByTarget((prev) => {
+        const next = { ...prev }
+        delete next[deletedId]
+        return next
+      })
+      setSelectedTargetId((current) => {
+        if (current !== deletedId) return current
+        const remaining = targets.filter((target) => target.id !== deletedId)
+        return remaining[0]?.id ?? null
+      })
+      setPendingDeleteTarget(null)
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'Failed to delete target')
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [pendingDeleteTarget, targets])
 
   const handleRefreshHistory = useCallback(() => {
     if (selectedTargetId) loadPingHistory(selectedTargetId)
@@ -148,10 +203,9 @@ function App(): React.JSX.Element {
         mainView={mainView}
         onSelectTarget={handleSelectTarget}
         onSelectView={handleSelectView}
-        onCreateTarget={handleCreateTarget}
-        isCreating={isCreating}
+        onOpenAddTarget={handleOpenAddTarget}
+        onDeleteTarget={handleRequestDeleteTarget}
         error={loadError}
-        createError={createError}
       />
       {mainView === 'target' && (
         <MainContent
@@ -167,6 +221,24 @@ function App(): React.JSX.Element {
         <OverviewChart targets={targets} updatesByTarget={updatesByTarget} />
       )}
       <UpdateDialog />
+      {isAddDialogOpen && (
+        <AddTargetDialog
+          onCreateTarget={handleCreateTarget}
+          isCreating={isCreating}
+          error={createError}
+          onClose={handleCloseAddTarget}
+        />
+      )}
+      {pendingDeleteTarget && (
+        <ConfirmDialog
+          title="Delete Target"
+          message={`Delete "${pendingDeleteTarget.name}" (${pendingDeleteTarget.host})? This removes its ping history, path data, and alert rules. This cannot be undone.`}
+          isConfirming={isDeleting}
+          error={deleteError}
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+        />
+      )}
     </div>
   )
 }

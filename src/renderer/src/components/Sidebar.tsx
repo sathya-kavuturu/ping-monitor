@@ -1,5 +1,3 @@
-import { useState, type FormEvent } from 'react'
-import type { CreateTargetInput } from '../../../shared/types'
 import type { MainView, TargetWithStatus } from '../App'
 
 interface SidebarProps {
@@ -9,10 +7,9 @@ interface SidebarProps {
   mainView: MainView
   onSelectTarget: (id: string) => void
   onSelectView: (view: MainView) => void
-  onCreateTarget: (input: CreateTargetInput) => void
-  isCreating: boolean
+  onOpenAddTarget: () => void
+  onDeleteTarget: (target: TargetWithStatus) => void
   error: string | null
-  createError: string | null
 }
 
 function Sidebar({
@@ -22,22 +19,10 @@ function Sidebar({
   mainView,
   onSelectTarget,
   onSelectView,
-  onCreateTarget,
-  isCreating,
-  error,
-  createError
+  onOpenAddTarget,
+  onDeleteTarget,
+  error
 }: SidebarProps): React.JSX.Element {
-  const [name, setName] = useState('')
-  const [host, setHost] = useState('')
-
-  const handleSubmit = (event: FormEvent): void => {
-    event.preventDefault()
-    if (!name.trim() || !host.trim()) return
-    onCreateTarget({ name: name.trim(), host: host.trim() })
-    setName('')
-    setHost('')
-  }
-
   return (
     <aside className={`sidebar ${isOpen ? '' : 'sidebar--closed'}`} aria-hidden={!isOpen}>
       <h2 className="sidebar-title">Views</h2>
@@ -73,7 +58,7 @@ function Sidebar({
 
       <ul className="target-list">
         {targets.map((target) => (
-          <li key={target.id}>
+          <li key={target.id} className="target-row">
             <button
               type="button"
               className={`target-item ${
@@ -87,31 +72,28 @@ function Sidebar({
                 <span className="target-host">{target.host}</span>
               </span>
             </button>
+            <button
+              type="button"
+              className="target-delete"
+              onClick={(event) => {
+                event.stopPropagation()
+                onDeleteTarget(target)
+              }}
+              aria-label={`Delete ${target.name}`}
+              title={`Delete ${target.name}`}
+            >
+              ×
+            </button>
           </li>
         ))}
       </ul>
 
-      <form className="add-target-form" onSubmit={handleSubmit}>
+      <div className="add-target-form">
         <h3 className="sidebar-subtitle">Add Target</h3>
-        <input
-          type="text"
-          placeholder="Name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          disabled={isCreating}
-        />
-        <input
-          type="text"
-          placeholder="Host / IP"
-          value={host}
-          onChange={(event) => setHost(event.target.value)}
-          disabled={isCreating}
-        />
-        <button type="submit" disabled={isCreating || !name.trim() || !host.trim()}>
-          {isCreating ? 'Adding…' : 'Add Target'}
+        <button type="button" onClick={onOpenAddTarget}>
+          Add Target
         </button>
-        {createError && <p className="sidebar-error">{createError}</p>}
-      </form>
+      </div>
     </aside>
   )
 }

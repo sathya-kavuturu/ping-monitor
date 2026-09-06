@@ -12,6 +12,8 @@ const api: ExposedApi = {
 
   createTarget: (input) => ipcRenderer.invoke(IpcChannels.TargetsCreate, input),
 
+  deleteTarget: (id) => ipcRenderer.invoke(IpcChannels.TargetsDelete, id),
+
   getPingHistory: (query) => ipcRenderer.invoke(IpcChannels.PingHistoryList, query),
 
   getHopHistory: (query) => ipcRenderer.invoke(IpcChannels.HopHistoryList, query),
