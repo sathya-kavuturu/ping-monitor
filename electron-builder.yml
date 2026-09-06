@@ -1,0 +1,35 @@
+appId: com.example.secure-electron-monitor
+productName: Secure Electron Monitor
+directories:
+  buildResources: resources
+files:
+  - out/**/*
+  - package.json
+  - prisma/migrations/**/*
+  - resources/tray-icon.png
+asarUnpack:
+  # better-sqlite3's native .node binding can't be loaded from inside asar.
+  - '**/better-sqlite3/**/*'
+win:
+  target: nsis
+  # Skips rcedit/signing-tool prep (electron-builder's winCodeSign package),
+  # which needs OS symlink privileges this account may not have (Developer
+  # Mode / Administrator). Not needed for an unsigned local/dev build.
+  signAndEditExecutable: false
+mac:
+  target: dmg
+linux:
+  target: AppImage
+nsis:
+  # Lets electron-updater silently replace the installed app in place
+  # instead of launching the full install wizard on every update.
+  oneClick: true
+  perMachine: false
+# electron-updater reads this at runtime (baked into app-update.yml at build
+# time) to check github.com/<owner>/<repo>/releases for newer versions.
+# `npm run release` publishes builds there; a plain `npm run build:win` never
+# uploads anything unless GH_TOKEN is set and --publish is passed.
+publish:
+  provider: github
+  owner: sathya-kavuturu
+  repo: secure-electron-monitor

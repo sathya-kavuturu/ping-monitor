@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Target {
+  id        String   @id @default(cuid())
+  name      String
+  host      String
+  createdAt DateTime @default(now())
+
+  pingHistory PingHistory[]
+  hopHistory  HopHistory[]
+  alertRules  AlertRule[]
+
+  @@unique([host])
+}
+
+/// One row per completed 1-minute rollup window for a target - raw
+/// per-second samples are aggregated in memory and flushed here once a
+/// minute so the DB stores a few thousand rows a year, not one per second.
+model PingHistory {
+  id             Int      @id @default(autoincrement())
+  targetId       String
+  target         Target   @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  bucketStart    DateTime // start of the 1-minute window (UTC, seconds/ms truncated)
+  sampleCount    Int // raw samples aggregated into this row
+  lostCount      Int // samples that timed out / had no reply
+  minLatencyMs   Float?
+  maxLatencyMs   Float?
+  avgLatencyMs   Float?
+  avgThroughput  Float?
+
+  @@unique([targetId, bucketStart])
+  @@index([targetId, bucketStart])
+}
+
+/// One row per hop of a single traceroute run. Rows sharing `traceId` make
+/// up one run; a target accumulates many runs over time for history.
+model HopHistory {
+  id         Int      @id @default(autoincrement())
+  targetId   String
+  target     Target   @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  traceId    String
+  hopNumber  Int
+  address    String?
+  hostname   String?
+  latencyMs  Float?
+  capturedAt DateTime @default(now())
+
+  @@index([targetId, capturedAt])
+  @@index([traceId, hopNumber])
+}
+
+/// A user-configured threshold the watchdog (src/main/alerting/watchdog.ts)
+/// evaluates against a rolling window of live samples for one target.
+/// `metric` is a plain string, not a Prisma enum - SQLite has no native enum
+/// type, so validity ('packet_loss' | 'latency') is enforced in the app
+/// layer (see AlertMetric in src/shared/types.ts).
+model AlertRule {
+  id            String   @id @default(cuid())
+  targetId      String
+  target        Target   @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  metric        String
+  /// Percent (0-100) for `packet_loss`, milliseconds for `latency`.
+  thresholdValue Float
+  enabled       Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  @@index([targetId])
+}

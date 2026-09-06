@@ -1,0 +1,21 @@
+node_modules
+out
+dist
+dist-electron
+.DS_Store
+*.log
+
+# Local AI-tool skill caches, not part of the app
+.agents
+.claude
+.windsurf
+skills-lock.json
+
+/src/generated/prisma
+
+# Local SQLite dev database created by `prisma migrate dev`
+/dev.db
+*.db-journal
+*.db-wal
+*.db-shm
+.env

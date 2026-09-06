@@ -1,0 +1,50 @@
+{
+  "name": "secure-electron-monitor",
+  "version": "1.0.0",
+  "description": "Secure Electron + React + TypeScript app scaffolded with electron-vite",
+  "main": "./out/main/index.js",
+  "author": "example.com",
+  "private": true,
+  "scripts": {
+    "postinstall": "prisma generate && electron-rebuild -f -w better-sqlite3",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "start": "electron-vite preview",
+    "dev": "electron-vite dev",
+    "build": "npm run typecheck && electron-vite build",
+    "build:unpack": "npm run build && electron-builder --dir",
+    "build:win": "npm run build && electron-builder --win",
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:linux": "npm run build && electron-builder --linux",
+    "release": "npm run build && electron-builder --win --publish always",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/adapter-better-sqlite3": "^7.10.0",
+    "@prisma/client": "^7.10.0",
+    "better-sqlite3": "^12.11.1",
+    "electron-updater": "^6.8.9",
+    "ping": "^1.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "uplot": "^1.6.32"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.2.0",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^22.10.5",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "dotenv": "^17.4.2",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^3.0.0",
+    "prisma": "^7.10.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}
