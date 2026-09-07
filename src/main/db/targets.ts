@@ -1,6 +1,6 @@
 import { getPrisma } from './client'
 import { Prisma, type Target } from '../../generated/prisma/client'
-import type { CreateTargetInput } from '../../shared/types'
+import type { CreateTargetInput, UpdateTargetInput } from '../../shared/types'
 
 export async function createTarget(input: CreateTargetInput): Promise<Target> {
   const name = input.name.trim()
@@ -11,6 +11,23 @@ export async function createTarget(input: CreateTargetInput): Promise<Target> {
 
   try {
     return await getPrisma().target.create({ data: { name, host } })
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      throw new Error(`A target for host "${host}" already exists`)
+    }
+    throw error
+  }
+}
+
+export async function updateTarget(input: UpdateTargetInput): Promise<Target> {
+  const name = input.name.trim()
+  const host = input.host.trim()
+  if (!name || !host) {
+    throw new Error('Target name and host are required')
+  }
+
+  try {
+    return await getPrisma().target.update({ where: { id: input.id }, data: { name, host } })
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       throw new Error(`A target for host "${host}" already exists`)

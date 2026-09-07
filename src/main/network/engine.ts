@@ -62,12 +62,18 @@ export class NetworkEngine {
     this.onTraceroute = options.onTraceroute
   }
 
-  /** Starts monitoring any target not already tracked, stops any no longer present. */
+  /**
+   * Starts monitoring any target not already tracked, stops any no longer
+   * present, and restarts (stop + re-track) any existing target whose host
+   * changed - an edited target keeps its id, so an id-only diff would
+   * otherwise keep silently pinging the old host forever.
+   */
   sync(targets: EngineTarget[]): void {
-    const nextIds = new Set(targets.map((target) => target.id))
+    const nextById = new Map(targets.map((target) => [target.id, target]))
 
     for (const [id, state] of this.states) {
-      if (!nextIds.has(id)) {
+      const next = nextById.get(id)
+      if (!next || next.host !== state.target.host) {
         clearInterval(state.timer)
         this.states.delete(id)
       }

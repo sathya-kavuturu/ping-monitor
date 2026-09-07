@@ -4,6 +4,7 @@ dist
 dist-electron
 .DS_Store
 *.log
+*.tsbuildinfo
 
 # Local AI-tool skill caches, not part of the app
 .agents

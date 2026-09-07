@@ -12,6 +12,8 @@ const api: ExposedApi = {
 
   createTarget: (input) => ipcRenderer.invoke(IpcChannels.TargetsCreate, input),
 
+  updateTarget: (input) => ipcRenderer.invoke(IpcChannels.TargetsUpdate, input),
+
   deleteTarget: (id) => ipcRenderer.invoke(IpcChannels.TargetsDelete, id),
 
   resolveHostname: (host) => ipcRenderer.invoke(IpcChannels.ResolveHostname, host),

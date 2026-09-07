@@ -4,6 +4,8 @@ interface TimeRangeControlsProps {
   rangeMs: number
   onSelectRange: (ms: number) => void
   onResetZoom: () => void
+  /** Highlights the reset button so a manual drag-zoom is obvious, not just inferable from the axis. */
+  isZoomed?: boolean
 }
 
 /**
@@ -14,7 +16,8 @@ interface TimeRangeControlsProps {
 function TimeRangeControls({
   rangeMs,
   onSelectRange,
-  onResetZoom
+  onResetZoom,
+  isZoomed = false
 }: TimeRangeControlsProps): React.JSX.Element {
   return (
     <div className="time-range-controls">
@@ -28,8 +31,12 @@ function TimeRangeControls({
           {preset.label}
         </button>
       ))}
-      <button type="button" className="time-range-reset-btn" onClick={onResetZoom}>
-        Reset zoom
+      <button
+        type="button"
+        className={`time-range-reset-btn ${isZoomed ? 'time-range-reset-btn--active' : ''}`}
+        onClick={onResetZoom}
+      >
+        {isZoomed ? '● Zoomed - reset' : 'Reset zoom'}
       </button>
     </div>
   )

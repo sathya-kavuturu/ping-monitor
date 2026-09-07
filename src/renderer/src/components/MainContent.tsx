@@ -4,6 +4,8 @@ import type { TargetWithStatus } from '../App'
 import TimelineChart from './TimelineChart'
 import PathVisualization from './PathVisualization'
 import RouteTable from './RouteTable'
+import PingHistoryTable from './PingHistoryTable'
+import Modal from './Modal'
 
 interface MainContentProps {
   target: TargetWithStatus | null
@@ -11,10 +13,6 @@ interface MainContentProps {
   pingHistory: PingHistoryRecord[]
   historyError: string | null
   onRefreshHistory: () => void
-}
-
-function formatTime(timestamp: number | Date): string {
-  return new Date(timestamp).toLocaleTimeString(undefined, { hour12: false })
 }
 
 function formatMs(value: number | null): string {
@@ -35,6 +33,7 @@ function MainContent({
   onRefreshHistory
 }: MainContentProps): React.JSX.Element {
   const latest = liveUpdates[liveUpdates.length - 1]
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false)
 
   // Forward-resolved just for display (e.g. "example.com (93.184.216.34)")
   // - the target keeps monitoring whatever host it was created with.
@@ -57,6 +56,8 @@ function MainContent({
   }, [target])
 
   const showResolvedIp = resolvedIp !== null && target !== null && resolvedIp !== target.host
+
+  useEffect(() => setIsHistoryExpanded(false), [target?.id])
 
   return (
     <main className="main-content">
@@ -102,47 +103,43 @@ function MainContent({
           <section className="feed">
             <div className="feed-header-row">
               <h2>Ping History (1-min rollups)</h2>
-              <button type="button" className="refresh-btn" onClick={onRefreshHistory}>
-                Refresh
-              </button>
+              <div className="feed-header-actions">
+                <button type="button" className="refresh-btn" onClick={onRefreshHistory}>
+                  Refresh
+                </button>
+                <button
+                  type="button"
+                  className="refresh-btn"
+                  onClick={() => setIsHistoryExpanded(true)}
+                >
+                  Pop out
+                </button>
+              </div>
             </div>
-            {historyError && <p className="sidebar-error">{historyError}</p>}
-            <table className="feed-table">
-              <thead>
-                <tr>
-                  <th>Bucket</th>
-                  <th>Samples</th>
-                  <th>Loss</th>
-                  <th>Min</th>
-                  <th>Avg</th>
-                  <th>Max</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pingHistory
-                  .slice()
-                  .reverse()
-                  .map((row) => (
-                    <tr key={row.id}>
-                      <td>{formatTime(row.bucketStart)}</td>
-                      <td>{row.sampleCount}</td>
-                      <td>{Math.round((row.lostCount / row.sampleCount) * 100)}%</td>
-                      <td>{formatMs(row.minLatencyMs)}</td>
-                      <td>{formatMs(row.avgLatencyMs)}</td>
-                      <td>{formatMs(row.maxLatencyMs)}</td>
-                    </tr>
-                  ))}
-                {pingHistory.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="feed-empty">
-                      No rollups yet - the first one lands about a minute after this target is
-                      added.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <PingHistoryTable pingHistory={pingHistory} historyError={historyError} />
           </section>
+
+          {isHistoryExpanded && (
+            <Modal
+              title="Ping History (1-min rollups)"
+              onClose={() => setIsHistoryExpanded(false)}
+              className="modal-card--wide"
+            >
+              <div className="modal-actions modal-actions--start">
+                <button type="button" className="refresh-btn" onClick={onRefreshHistory}>
+                  Refresh
+                </button>
+                <button
+                  type="button"
+                  className="refresh-btn"
+                  onClick={() => setIsHistoryExpanded(false)}
+                >
+                  Merge back into tab
+                </button>
+              </div>
+              <PingHistoryTable pingHistory={pingHistory} historyError={historyError} expanded />
+            </Modal>
+          )}
         </>
       )}
     </main>

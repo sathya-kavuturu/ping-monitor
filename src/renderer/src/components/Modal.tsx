@@ -4,6 +4,8 @@ interface ModalProps {
   title: string
   onClose: () => void
   children: ReactNode
+  /** Extra class(es) on `.modal-card` - e.g. `modal-card--wide` for content wider than the default dialog. */
+  className?: string
 }
 
 /**
@@ -12,7 +14,7 @@ interface ModalProps {
  * message text, action buttons), so this stays reusable for both a
  * confirmation prompt and a data-entry form.
  */
-function Modal({ title, onClose, children }: ModalProps): React.JSX.Element {
+function Modal({ title, onClose, children, className }: ModalProps): React.JSX.Element {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') onClose()
@@ -23,7 +25,10 @@ function Modal({ title, onClose, children }: ModalProps): React.JSX.Element {
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+      <div
+        className={['modal-card', className].filter(Boolean).join(' ')}
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="modal-header">
           <h2>{title}</h2>
           <button type="button" className="modal-close" onClick={onClose} aria-label="Close">

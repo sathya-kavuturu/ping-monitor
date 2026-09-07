@@ -188,12 +188,8 @@ function PathVisualization({ updates, targetName }: PathVisualizationProps): Rea
           </svg>
 
           <div className="path-column">
-            <div
-              className="path-node"
-              ref={registerNodeRef(you.key)}
-              onMouseEnter={(event) => handleEnter(event, you)}
-            >
-              <div className="path-node-dot status-online" />
+            <div className="path-node" onMouseEnter={(event) => handleEnter(event, you)}>
+              <div className="path-node-dot status-online" ref={registerNodeRef(you.key)} />
               <span className="path-node-label">You</span>
             </div>
           </div>
@@ -216,10 +212,12 @@ function PathVisualization({ updates, targetName }: PathVisualizationProps): Rea
                         .filter(Boolean)
                         .join(' ')}
                       key={node.key}
-                      ref={registerNodeRef(node.key)}
                       onMouseEnter={(event) => handleEnter(event, node)}
                     >
-                      <div className={`path-node-dot status-${status}`} />
+                      <div
+                        className={`path-node-dot status-${status}`}
+                        ref={registerNodeRef(node.key)}
+                      />
                       <span className="path-node-label">
                         {nodeLabel(node, isLastColumn, targetName)}
                       </span>

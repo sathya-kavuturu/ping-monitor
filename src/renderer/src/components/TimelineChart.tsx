@@ -15,7 +15,11 @@ const COLOR_LOSS = '#e6543e'
 const COLOR_AXIS = '#8b91a2'
 const COLOR_GRID = 'rgba(255, 255, 255, 0.08)'
 
-function buildOptions(width: number, height: number): uPlot.Options {
+function buildOptions(
+  width: number,
+  height: number,
+  onXScaleChange: (min: number, max: number) => void
+): uPlot.Options {
   return {
     width,
     height,
@@ -72,7 +76,17 @@ function buildOptions(width: number, height: number): uPlot.Options {
     // Drag-select on the x-axis zooms into that range (uPlot's built-in
     // cursor.drag.setScale, on by default) - `TimeRangeControls`' "Reset
     // zoom" button (`fitToRange`) is the way back out.
-    cursor: { drag: { x: true, y: false } }
+    cursor: { drag: { x: true, y: false } },
+    hooks: {
+      setScale: [
+        (u, key) => {
+          if (key !== 'x') return
+          const { min, max } = u.scales.x
+          if (min == null || max == null) return
+          onXScaleChange(min, max)
+        }
+      ]
+    }
   }
 }
 
@@ -86,6 +100,14 @@ function TimelineChart({ updates }: TimelineChartProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const plotRef = useRef<uPlot | null>(null)
   const [rangeMs, setRangeMs] = useState(DEFAULT_RANGE_MS)
+  const [isZoomed, setIsZoomed] = useState(false)
+  // Read inside the setScale hook below, which closes over the plot
+  // instance created once on mount - a ref keeps it seeing the latest
+  // selected range without recreating the plot every time it changes.
+  const rangeMsRef = useRef(rangeMs)
+  useEffect(() => {
+    rangeMsRef.current = rangeMs
+  }, [rangeMs])
 
   useEffect(() => {
     const container = containerRef.current
@@ -93,7 +115,14 @@ function TimelineChart({ updates }: TimelineChartProps): React.JSX.Element {
 
     const { width, height } = container.getBoundingClientRect()
     const plot = new uPlot(
-      buildOptions(Math.max(width, 1), Math.max(height, 1)),
+      buildOptions(Math.max(width, 1), Math.max(height, 1), (min, max) => {
+        // A manual drag-zoom shrinks the visible span below the selected
+        // preset's full width - that's the only way `isZoomed` flips true,
+        // so an explicit fitToRange() (which restores the full span) always
+        // clears it again.
+        const fullSpanSec = rangeMsRef.current / 1000
+        setIsZoomed(max - min < fullSpanSec - 1)
+      }),
       [[], [], []],
       container
     )
@@ -103,7 +132,13 @@ function TimelineChart({ updates }: TimelineChartProps): React.JSX.Element {
       const entry = entries[0]
       if (!entry) return
       const { width: w, height: h } = entry.contentRect
-      if (w > 0 && h > 0) plot.setSize({ width: w, height: h })
+      // uPlot's setSize() unconditionally forces a full path rebuild + redraw
+      // even when the size hasn't actually changed - ResizeObserver can fire
+      // with a no-op (sub-pixel) size report, so skip the call rather than
+      // pay for a needless full redraw.
+      if (w > 0 && h > 0 && (Math.abs(plot.width - w) >= 0.5 || Math.abs(plot.height - h) >= 0.5)) {
+        plot.setSize({ width: w, height: h })
+      }
     })
     resizeObserver.observe(container)
 
@@ -115,13 +150,21 @@ function TimelineChart({ updates }: TimelineChartProps): React.JSX.Element {
   }, [])
 
   useEffect(() => {
+    const plot = plotRef.current
+    if (!plot) return
     const cutoff = Date.now() - rangeMs
     const inRange = updates.filter((update) => update.timestamp >= cutoff)
     const series = buildChartSeries(inRange)
-    // resetScales: false - a manual drag-zoom (see cursor.drag above) must
-    // survive the next ~1s data tick; only an explicit range change or
-    // "Reset zoom" click should re-fit the x-axis (see fitToRange).
-    plotRef.current?.setData([series.xs, series.latency, series.lossPercent], false)
+    // setData's own resetScales:false path skips uPlot's internal commit()
+    // entirely - so without an explicit redraw() below, the canvas simply
+    // never repaints on a plain data tick, and the picture only updates in
+    // one big jump whenever some unrelated layout reflow happens to fire the
+    // ResizeObserver above. redraw() (rebuildPaths defaults true) reapplies
+    // the plot's CURRENT x-scale bounds - preserving a manual drag-zoom
+    // instead of re-fitting to the full data range - while still forcing the
+    // repaint, so every ~1s tick lands as its own smooth, immediate update.
+    plot.setData([series.xs, series.latency, series.lossPercent], false)
+    plot.redraw()
   }, [updates, rangeMs])
 
   const fitToRange = (): void => {
@@ -138,9 +181,17 @@ function TimelineChart({ updates }: TimelineChartProps): React.JSX.Element {
     <section className="feed">
       <div className="feed-header-row">
         <h2>Latency &amp; Packet Loss</h2>
-        <TimeRangeControls rangeMs={rangeMs} onSelectRange={setRangeMs} onResetZoom={fitToRange} />
+        <TimeRangeControls
+          rangeMs={rangeMs}
+          onSelectRange={setRangeMs}
+          onResetZoom={fitToRange}
+          isZoomed={isZoomed}
+        />
       </div>
-      <div ref={containerRef} className="timeline-chart" />
+      <div
+        ref={containerRef}
+        className={`timeline-chart ${isZoomed ? 'timeline-chart--zoomed' : ''}`}
+      />
     </section>
   )
 }

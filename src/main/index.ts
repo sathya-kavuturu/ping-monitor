@@ -7,7 +7,8 @@ import type {
   CreateTargetInput,
   HopHistoryQuery,
   NetworkUpdate,
-  PingHistoryQuery
+  PingHistoryQuery,
+  UpdateTargetInput
 } from '../shared/types'
 import { NetworkEngine } from './network/engine'
 import { resolveHostname } from './network/forward-dns'
@@ -16,7 +17,7 @@ import { notifyAlertEvent } from './alerting/notifications'
 import { createTray, destroyTray } from './tray'
 import { initAutoUpdater, checkForUpdates, downloadUpdate } from './updater'
 import { initDatabase, closeDatabase } from './db/client'
-import { createTarget, deleteTarget, listTargets } from './db/targets'
+import { createTarget, deleteTarget, listTargets, updateTarget } from './db/targets'
 import { savePingRollup, getPingHistory, type RawPingSample } from './db/ping-history'
 import { saveHopHistory, getHopHistory } from './db/hop-history'
 import {
@@ -209,6 +210,15 @@ function registerIpcHandlers(): void {
   ipcMain.handle(IpcChannels.TargetsCreate, async (event, input: CreateTargetInput) => {
     assertTrustedSender(event.senderFrame)
     const target = await createTarget(input)
+    await refreshCurrentTargets()
+    return target
+  })
+
+  ipcMain.handle(IpcChannels.TargetsUpdate, async (event, input: UpdateTargetInput) => {
+    assertTrustedSender(event.senderFrame)
+    const target = await updateTarget(input)
+    // Host may have changed - refreshCurrentTargets() re-syncs the engine,
+    // which restarts monitoring on the new host (see NetworkEngine.sync).
     await refreshCurrentTargets()
     return target
   })

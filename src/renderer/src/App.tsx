@@ -4,7 +4,8 @@ import type {
   NetworkUpdate,
   PingHistoryRecord,
   Target,
-  TargetStatus
+  TargetStatus,
+  UpdateTargetInput
 } from '../../shared/types'
 import { CHART_WINDOW_MS } from './lib/chart-data'
 import Sidebar from './components/Sidebar'
@@ -13,6 +14,7 @@ import AllAlerts from './components/AllAlerts'
 import OverviewChart from './components/OverviewChart'
 import UpdateDialog from './components/UpdateDialog'
 import AddTargetDialog from './components/AddTargetDialog'
+import EditTargetDialog from './components/EditTargetDialog'
 import ConfirmDialog from './components/ConfirmDialog'
 
 export interface TargetWithStatus extends Target {
@@ -34,6 +36,9 @@ function App(): React.JSX.Element {
   const [createError, setCreateError] = useState<string | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [editingTarget, setEditingTarget] = useState<TargetWithStatus | null>(null)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [updateError, setUpdateError] = useState<string | null>(null)
   const [pendingDeleteTarget, setPendingDeleteTarget] = useState<TargetWithStatus | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -134,6 +139,30 @@ function App(): React.JSX.Element {
     setCreateError(null)
   }, [])
 
+  const handleOpenEditTarget = useCallback((target: TargetWithStatus) => {
+    setUpdateError(null)
+    setEditingTarget(target)
+  }, [])
+
+  const handleCloseEditTarget = useCallback(() => {
+    setEditingTarget(null)
+    setUpdateError(null)
+  }, [])
+
+  const handleUpdateTarget = useCallback(async (input: UpdateTargetInput) => {
+    setUpdateError(null)
+    setIsUpdating(true)
+    try {
+      const target = await window.api.updateTarget(input)
+      setTargets((prev) => prev.map((t) => (t.id === target.id ? { ...t, ...target } : t)))
+      setEditingTarget(null)
+    } catch (error) {
+      setUpdateError(error instanceof Error ? error.message : 'Failed to update target')
+    } finally {
+      setIsUpdating(false)
+    }
+  }, [])
+
   const handleRequestDeleteTarget = useCallback((target: TargetWithStatus) => {
     setDeleteError(null)
     setPendingDeleteTarget(target)
@@ -204,6 +233,7 @@ function App(): React.JSX.Element {
         onSelectTarget={handleSelectTarget}
         onSelectView={handleSelectView}
         onOpenAddTarget={handleOpenAddTarget}
+        onEditTarget={handleOpenEditTarget}
         onDeleteTarget={handleRequestDeleteTarget}
         error={loadError}
       />
@@ -227,6 +257,15 @@ function App(): React.JSX.Element {
           isCreating={isCreating}
           error={createError}
           onClose={handleCloseAddTarget}
+        />
+      )}
+      {editingTarget && (
+        <EditTargetDialog
+          target={editingTarget}
+          onUpdateTarget={handleUpdateTarget}
+          isUpdating={isUpdating}
+          error={updateError}
+          onClose={handleCloseEditTarget}
         />
       )}
       {pendingDeleteTarget && (

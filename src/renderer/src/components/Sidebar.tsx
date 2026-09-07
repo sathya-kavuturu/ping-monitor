@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import type { MainView, TargetWithStatus } from '../App'
+import ContextMenu from './ContextMenu'
 
 interface SidebarProps {
   isOpen: boolean
@@ -8,8 +10,15 @@ interface SidebarProps {
   onSelectTarget: (id: string) => void
   onSelectView: (view: MainView) => void
   onOpenAddTarget: () => void
+  onEditTarget: (target: TargetWithStatus) => void
   onDeleteTarget: (target: TargetWithStatus) => void
   error: string | null
+}
+
+interface TargetMenuState {
+  target: TargetWithStatus
+  x: number
+  y: number
 }
 
 function Sidebar({
@@ -20,9 +29,12 @@ function Sidebar({
   onSelectTarget,
   onSelectView,
   onOpenAddTarget,
+  onEditTarget,
   onDeleteTarget,
   error
 }: SidebarProps): React.JSX.Element {
+  const [menu, setMenu] = useState<TargetMenuState | null>(null)
+
   return (
     <aside className={`sidebar ${isOpen ? '' : 'sidebar--closed'}`} aria-hidden={!isOpen}>
       <h2 className="sidebar-title">Views</h2>
@@ -58,7 +70,14 @@ function Sidebar({
 
       <ul className="target-list">
         {targets.map((target) => (
-          <li key={target.id} className="target-row">
+          <li
+            key={target.id}
+            className="target-row"
+            onContextMenu={(event) => {
+              event.preventDefault()
+              setMenu({ target, x: event.clientX, y: event.clientY })
+            }}
+          >
             <button
               type="button"
               className={`target-item ${
@@ -72,18 +91,6 @@ function Sidebar({
                 <span className="target-host">{target.host}</span>
               </span>
             </button>
-            <button
-              type="button"
-              className="target-delete"
-              onClick={(event) => {
-                event.stopPropagation()
-                onDeleteTarget(target)
-              }}
-              aria-label={`Delete ${target.name}`}
-              title={`Delete ${target.name}`}
-            >
-              ×
-            </button>
           </li>
         ))}
       </ul>
@@ -94,6 +101,18 @@ function Sidebar({
           Add Target
         </button>
       </div>
+
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          items={[
+            { label: 'Edit', onClick: () => onEditTarget(menu.target) },
+            { label: 'Delete', onClick: () => onDeleteTarget(menu.target), danger: true }
+          ]}
+        />
+      )}
     </aside>
   )
 }

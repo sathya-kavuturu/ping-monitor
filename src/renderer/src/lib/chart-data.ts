@@ -38,29 +38,36 @@ export interface ChartSeries {
 }
 
 /**
- * Turns a target's raw live-update buffer into uPlot-ready series. Assumes
- * `updates` is already sorted ascending by timestamp (true for the buffer
- * `App.tsx` maintains, which only ever appends).
+ * Rolling loss percentage (0-100) over the trailing `LOSS_ROLLING_WINDOW`
+ * samples ending at each index - shared by `buildChartSeries` (per-target
+ * timeline) and the Overview tab's cross-target series (`overview-chart.ts`),
+ * so both use the exact same smoothing.
  */
-export function buildChartSeries(updates: NetworkUpdate[]): ChartSeries {
-  const xs: number[] = new Array(updates.length)
-  const latency: (number | null)[] = new Array(updates.length)
+export function computeRollingLossPercent(updates: NetworkUpdate[]): number[] {
   const lossPercent: number[] = new Array(updates.length)
-
   let lostInWindow = 0
 
   for (let i = 0; i < updates.length; i++) {
-    const update = updates[i]
-    xs[i] = Math.round(update.timestamp / 1000)
-    latency[i] = update.latencyMs
-
-    if (update.latencyMs === null) lostInWindow += 1
+    if (updates[i].latencyMs === null) lostInWindow += 1
     const dropIndex = i - LOSS_ROLLING_WINDOW
     if (dropIndex >= 0 && updates[dropIndex].latencyMs === null) lostInWindow -= 1
 
     const windowSize = Math.min(i + 1, LOSS_ROLLING_WINDOW)
     lossPercent[i] = Math.round((lostInWindow / windowSize) * 100)
   }
+
+  return lossPercent
+}
+
+/**
+ * Turns a target's raw live-update buffer into uPlot-ready series. Assumes
+ * `updates` is already sorted ascending by timestamp (true for the buffer
+ * `App.tsx` maintains, which only ever appends).
+ */
+export function buildChartSeries(updates: NetworkUpdate[]): ChartSeries {
+  const xs = updates.map((update) => Math.round(update.timestamp / 1000))
+  const latency = updates.map((update) => update.latencyMs)
+  const lossPercent = computeRollingLossPercent(updates)
 
   return { xs, latency, lossPercent }
 }

@@ -17,6 +17,12 @@ export interface CreateTargetInput {
   host: string
 }
 
+export interface UpdateTargetInput {
+  id: string
+  name: string
+  host: string
+}
+
 /** One hop of a traceroute path - shared shape for the live update and `HopRecord`. */
 export interface HopSample {
   hopNumber: number
@@ -123,6 +129,7 @@ export type UpdateStatusEvent =
 export interface ExposedApi {
   getTargets: () => Promise<Target[]>
   createTarget: (input: CreateTargetInput) => Promise<Target>
+  updateTarget: (input: UpdateTargetInput) => Promise<Target>
   /** Cascade-deletes the target's ping history, hop history, and alert rules too. */
   deleteTarget: (id: string) => Promise<void>
   /** Resolves a DNS name (or IP literal, returned unchanged) to an IP address, or `null` if it can't be resolved. */
