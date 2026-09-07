@@ -60,7 +60,11 @@ describe('buildOverviewChartData', () => {
     vi.useFakeTimers()
     vi.setSystemTime(10_000)
 
-    const data = buildOverviewChartData([{ id: 't1', name: 'A', host: 'h' }], { t1: [update(9_000, null)] }, 5_000)
+    const data = buildOverviewChartData(
+      [{ id: 't1', name: 'A', host: 'h' }],
+      { t1: [update(9_000, null)] },
+      5_000
+    )
 
     const secondIndex = data.xs.indexOf(9)
     expect(data.series[0].hasSample[secondIndex]).toBe(true)

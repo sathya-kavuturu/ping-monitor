@@ -124,7 +124,9 @@ function IndividualLatencyChart({
     const { min: xMin, max: xMax } = u.scales.x
     const { left, top } = plotOffsetCss(u)
     const next = anomaliesRef.current
-      .filter((a) => xMin == null || xMax == null || (a.timestampSec >= xMin && a.timestampSec <= xMax))
+      .filter(
+        (a) => xMin == null || xMax == null || (a.timestampSec >= xMin && a.timestampSec <= xMax)
+      )
       .map((a) => ({
         key: anomalyMarkerKey(a.targetId, a.index),
         left: left + u.valToPos(a.timestampSec, 'x', false),

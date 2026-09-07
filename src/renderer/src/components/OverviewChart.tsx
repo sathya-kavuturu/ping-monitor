@@ -167,10 +167,7 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
 
   const anomaliesByTarget = useMemo(() => detectPacketLossAnomalies(xs, series), [xs, series])
 
-  const labelByTargetId = useMemo(
-    () => new Map(series.map((s) => [s.targetId, s.label])),
-    [series]
-  )
+  const labelByTargetId = useMemo(() => new Map(series.map((s) => [s.targetId, s.label])), [series])
   const labelByTargetIdRef = useRef(labelByTargetId)
   useEffect(() => {
     labelByTargetIdRef.current = labelByTargetId
@@ -194,7 +191,9 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
     const { min: xMin, max: xMax } = u.scales.x
     const { left, top } = plotOffsetCss(u)
     const next = combinedAnomaliesRef.current
-      .filter((a) => xMin == null || xMax == null || (a.timestampSec >= xMin && a.timestampSec <= xMax))
+      .filter(
+        (a) => xMin == null || xMax == null || (a.timestampSec >= xMin && a.timestampSec <= xMax)
+      )
       .map((a) => ({
         key: anomalyMarkerKey(a.targetId, a.index),
         left: left + u.valToPos(a.timestampSec, 'x', false),

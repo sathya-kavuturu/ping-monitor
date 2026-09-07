@@ -49,10 +49,7 @@ function ChartAnomalyOverlay({ markers }: ChartAnomalyOverlayProps): React.JSX.E
       ))}
 
       {hovered && (
-        <div
-          className="chart-anomaly-tooltip"
-          style={{ left: hovered.left, top: hovered.top }}
-        >
+        <div className="chart-anomaly-tooltip" style={{ left: hovered.left, top: hovered.top }}>
           <div className="path-tooltip-header">
             <span className="path-node-dot path-node-dot--mini status-offline" />
             Packet loss spike
