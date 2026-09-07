@@ -24,7 +24,9 @@ export function loadSettings(): AppSettings {
   try {
     const raw = readFileSync(settingsPath(), 'utf-8')
     const parsed = JSON.parse(raw) as Partial<AppSettings>
-    cached = { pingIntervalMs: clampPingIntervalMs(parsed.pingIntervalMs ?? DEFAULT_PING_INTERVAL_MS) }
+    cached = {
+      pingIntervalMs: clampPingIntervalMs(parsed.pingIntervalMs ?? DEFAULT_PING_INTERVAL_MS)
+    }
   } catch {
     // Missing/corrupt file on first run or a fresh install - fall back silently.
     cached = { pingIntervalMs: DEFAULT_PING_INTERVAL_MS }
