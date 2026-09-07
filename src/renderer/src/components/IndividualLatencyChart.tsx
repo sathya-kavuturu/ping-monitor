@@ -220,7 +220,7 @@ function IndividualLatencyChart({
     <div className="chart-wrap">
       <div
         ref={containerRef}
-        className={`timeline-chart overview-chart ${isZoomed ? 'timeline-chart--zoomed' : ''}`}
+        className={`timeline-chart overview-chart overview-chart--individual ${isZoomed ? 'timeline-chart--zoomed' : ''}`}
       />
       <ChartAnomalyOverlay markers={markers} />
     </div>

@@ -48,7 +48,7 @@ const DEFAULT_DEGRADED_THRESHOLD_MS = 150
  */
 export class NetworkEngine {
   private readonly states = new Map<string, TargetState>()
-  private readonly pingIntervalMs: number
+  private pingIntervalMs: number
   private readonly traceIntervalMs: number
   private readonly degradedThresholdMs: number
   private readonly onSample: NetworkEngineOptions['onSample']
@@ -91,6 +91,24 @@ export class NetworkEngine {
       clearInterval(state.timer)
     }
     this.states.clear()
+  }
+
+  getPingIntervalMs(): number {
+    return this.pingIntervalMs
+  }
+
+  /**
+   * Applies a new ping cadence immediately - re-arms every currently tracked
+   * target's timer at the new interval, rather than waiting for the next
+   * `sync()` (which only starts/stops targets, not reschedule survivors).
+   */
+  setPingIntervalMs(ms: number): void {
+    if (ms === this.pingIntervalMs) return
+    this.pingIntervalMs = ms
+    for (const [id, state] of this.states) {
+      clearInterval(state.timer)
+      state.timer = setInterval(() => void this.tick(id), this.pingIntervalMs)
+    }
   }
 
   private track(target: EngineTarget): void {

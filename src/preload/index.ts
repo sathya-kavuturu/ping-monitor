@@ -43,6 +43,10 @@ const api: ExposedApi = {
     }
   },
 
+  getSettings: () => ipcRenderer.invoke(IpcChannels.SettingsGet),
+
+  setPingIntervalMs: (ms) => ipcRenderer.invoke(IpcChannels.SettingsSetPingInterval, ms),
+
   checkForUpdates: () => ipcRenderer.send(IpcChannels.UpdateCheck),
 
   downloadUpdate: () => ipcRenderer.send(IpcChannels.UpdateDownload),

@@ -15,6 +15,8 @@ export const IpcChannels = {
   AlertRulesSetEnabled: 'alert-rules:set-enabled',
   AlertRulesDelete: 'alert-rules:delete',
   NetworkUpdate: 'network:update',
+  SettingsGet: 'settings:get',
+  SettingsSetPingInterval: 'settings:set-ping-interval',
   UpdateCheck: 'update:check',
   UpdateDownload: 'update:download',
   UpdateStatus: 'update:status'

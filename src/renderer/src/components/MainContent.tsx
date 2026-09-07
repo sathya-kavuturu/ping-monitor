@@ -38,12 +38,13 @@ function MainContent({
   // Forward-resolved just for display (e.g. "example.com (93.184.216.34)")
   // - the target keeps monitoring whatever host it was created with.
   const [resolvedIp, setResolvedIp] = useState<string | null>(null)
+  const targetHost = target?.host ?? null
   useEffect(() => {
     setResolvedIp(null)
-    if (!target) return
+    if (!targetHost) return
     let cancelled = false
     window.api
-      .resolveHostname(target.host)
+      .resolveHostname(targetHost)
       .then((ip) => {
         if (!cancelled) setResolvedIp(ip)
       })
@@ -53,7 +54,7 @@ function MainContent({
     return () => {
       cancelled = true
     }
-  }, [target])
+  }, [targetHost])
 
   const showResolvedIp = resolvedIp !== null && target !== null && resolvedIp !== target.host
 

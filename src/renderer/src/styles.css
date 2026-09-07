@@ -420,6 +420,35 @@ body {
   margin-left: auto;
 }
 
+.ping-interval-setting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 20px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.ping-interval-setting input {
+  width: 64px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 4px 8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ping-interval-setting input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.ping-interval-setting input:disabled {
+  opacity: 0.5;
+}
+
 .view-mode-btn {
   background: transparent;
   border: 1px solid var(--border);
@@ -793,8 +822,32 @@ body {
   color: var(--text-muted);
 }
 
+/* uPlot's default drag-to-zoom selection box (rgba(0,0,0,0.07)) is nearly
+   invisible against this app's dark background - give it a visible
+   accent-colored fill and edge so the in-progress selection is legible. */
+.timeline-chart .u-select {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  border-left: 1px solid var(--accent);
+  border-right: 1px solid var(--accent);
+}
+
 .overview-chart {
   height: 320px;
+}
+
+/* Individual view stacks one chart per target - shorter charts mean more
+   targets are comparable on screen at once, without scrolling. */
+.overview-chart--individual {
+  height: 140px;
+}
+
+.feed--compact .feed-header-row {
+  margin-bottom: 4px;
+}
+
+.feed--compact h2 {
+  margin-bottom: 0;
+  font-size: 12px;
 }
 
 .route-meta {

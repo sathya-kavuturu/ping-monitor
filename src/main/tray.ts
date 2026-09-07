@@ -26,7 +26,7 @@ function resolveIconPath(): string {
 export function createTray(callbacks: TrayCallbacks): Tray {
   const icon = nativeImage.createFromPath(resolveIconPath())
   tray = new Tray(icon)
-  tray.setToolTip('Secure Electron Monitor')
+  tray.setToolTip('Ping Monitor')
 
   tray.setContextMenu(
     Menu.buildFromTemplate([

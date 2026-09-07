@@ -1,5 +1,5 @@
 appId: com.example.secure-electron-monitor
-productName: Secure Electron Monitor
+productName: Ping Monitor
 directories:
   buildResources: resources
 files:
@@ -7,6 +7,7 @@ files:
   - package.json
   - prisma/migrations/**/*
   - resources/tray-icon.png
+  - resources/icon.png
 asarUnpack:
   # better-sqlite3's native .node binding can't be loaded from inside asar.
   - '**/better-sqlite3/**/*'

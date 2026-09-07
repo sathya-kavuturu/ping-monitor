@@ -17,6 +17,7 @@ import { notifyAlertEvent } from './alerting/notifications'
 import { createTray, destroyTray } from './tray'
 import { initAutoUpdater, checkForUpdates, downloadUpdate } from './updater'
 import { initDatabase, closeDatabase } from './db/client'
+import { loadSettings, setPingIntervalMs as persistPingIntervalMs } from './settings'
 import { createTarget, deleteTarget, listTargets, updateTarget } from './db/targets'
 import { savePingRollup, getPingHistory, type RawPingSample } from './db/ping-history'
 import { saveHopHistory, getHopHistory } from './db/hop-history'
@@ -88,6 +89,11 @@ function createWindow(): void {
     minHeight: 480,
     show: false,
     autoHideMenuBar: true,
+    // Packaged Windows/macOS builds get their icon baked into the
+    // executable/bundle by electron-builder (from resources/icon.png) - this
+    // is what actually shows the icon in dev, and on Linux where the exe
+    // itself carries no icon resource.
+    icon: join(app.getAppPath(), 'resources', 'icon.png'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       // --- Security-critical settings ---
@@ -272,6 +278,18 @@ function registerIpcHandlers(): void {
     await refreshAlertRules()
   })
 
+  ipcMain.handle(IpcChannels.SettingsGet, async (event) => {
+    assertTrustedSender(event.senderFrame)
+    return loadSettings()
+  })
+
+  ipcMain.handle(IpcChannels.SettingsSetPingInterval, async (event, ms: number) => {
+    assertTrustedSender(event.senderFrame)
+    const settings = persistPingIntervalMs(ms)
+    engine.setPingIntervalMs(settings.pingIntervalMs)
+    return settings
+  })
+
   ipcMain.on(IpcChannels.UpdateCheck, (event) => {
     assertTrustedSender(event.senderFrame)
     checkForUpdates()
@@ -301,6 +319,9 @@ app.whenReady().then(async () => {
   })
 
   initDatabase()
+  // Applied before the first sync so newly-tracked targets are already on
+  // the persisted cadence, not the engine's built-in 1s default.
+  engine.setPingIntervalMs(loadSettings().pingIntervalMs)
   await refreshCurrentTargets()
   await refreshAlertRules()
   rollupFlushTimer = setInterval(() => void flushPingRollups(), ROLLUP_FLUSH_INTERVAL_MS)

@@ -107,6 +107,12 @@ export interface CreateAlertRuleInput {
   thresholdValue: number
 }
 
+/** Persisted app-wide preferences (see `src/main/settings.ts`). */
+export interface AppSettings {
+  /** How often every target is pinged, applied to all targets uniformly. */
+  pingIntervalMs: number
+}
+
 /**
  * Lifecycle of the app's self-update check, broadcast from main to renderer.
  * `available`'s `version` is what the Update/Cancel dialog shows; `download
@@ -142,6 +148,9 @@ export interface ExposedApi {
   setAlertRuleEnabled: (id: string, enabled: boolean) => Promise<AlertRule>
   deleteAlertRule: (id: string) => Promise<void>
   onNetworkUpdate: (callback: (update: NetworkUpdate) => void) => () => void
+  getSettings: () => Promise<AppSettings>
+  /** Applies (and persists) a new ping cadence, in milliseconds, to every target. */
+  setPingIntervalMs: (ms: number) => Promise<AppSettings>
   checkForUpdates: () => void
   downloadUpdate: () => void
   onUpdateStatus: (callback: (event: UpdateStatusEvent) => void) => () => void

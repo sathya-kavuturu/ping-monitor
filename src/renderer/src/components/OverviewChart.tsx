@@ -114,6 +114,39 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
   const plotRef = useRef<uPlot | null>(null)
   const [rangeMs, setRangeMs] = useState(DEFAULT_RANGE_MS)
   const [viewMode, setViewMode] = useState<ViewMode>('combined')
+
+  // The applied cadence (seconds) and the raw text of the input - kept
+  // separate so an in-progress edit (e.g. a cleared field, or "2.") isn't
+  // clobbered by re-renders before the user commits it.
+  const [pingIntervalSec, setPingIntervalSec] = useState<number | null>(null)
+  const [pingIntervalInput, setPingIntervalInput] = useState('')
+  const [isSavingInterval, setIsSavingInterval] = useState(false)
+
+  useEffect(() => {
+    window.api.getSettings().then((settings) => {
+      const seconds = settings.pingIntervalMs / 1000
+      setPingIntervalSec(seconds)
+      setPingIntervalInput(String(seconds))
+    })
+  }, [])
+
+  const commitPingInterval = (): void => {
+    const seconds = Number(pingIntervalInput)
+    if (!Number.isFinite(seconds) || seconds <= 0) {
+      // Invalid edit - revert the field to the last known-applied value.
+      setPingIntervalInput(pingIntervalSec !== null ? String(pingIntervalSec) : '')
+      return
+    }
+    setIsSavingInterval(true)
+    window.api
+      .setPingIntervalMs(seconds * 1000)
+      .then((settings) => {
+        const appliedSeconds = settings.pingIntervalMs / 1000
+        setPingIntervalSec(appliedSeconds)
+        setPingIntervalInput(String(appliedSeconds))
+      })
+      .finally(() => setIsSavingInterval(false))
+  }
   // Tracks unchecked targets rather than checked ones, so a newly added
   // target defaults to visible without needing its id added explicitly.
   const [excludedTargetIds, setExcludedTargetIds] = useState<Set<string>>(new Set())
@@ -295,6 +328,25 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
     <main className="main-content">
       <header className="main-header">
         <h1>Overview</h1>
+        <div className="ping-interval-setting">
+          <label htmlFor="ping-interval-input">Ping interval (s)</label>
+          <input
+            id="ping-interval-input"
+            type="number"
+            min={0.2}
+            step={0.5}
+            value={pingIntervalInput}
+            disabled={pingIntervalSec === null || isSavingInterval}
+            onChange={(event) => setPingIntervalInput(event.target.value)}
+            onBlur={commitPingInterval}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return
+              event.preventDefault()
+              commitPingInterval()
+              event.currentTarget.blur()
+            }}
+          />
+        </div>
         <div className="view-mode-toggle">
           <button
             type="button"
@@ -378,7 +430,7 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
             </section>
           ) : (
             visibleTargets.map((target) => (
-              <section className="feed" key={target.id}>
+              <section className="feed feed--compact" key={target.id}>
                 <div className="feed-header-row">
                   <h2>
                     {target.name} ({target.host})
