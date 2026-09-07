@@ -72,4 +72,32 @@ describe('buildOverviewChartData', () => {
 
     vi.useRealTimers()
   })
+
+  it('grids on the ping interval, not a hardcoded 1s, so slower cadences stay adjacent', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(20_000)
+
+    // 5s cadence: samples at 0s, 5s, 10s, 15s. A 1s-hardcoded grid would
+    // leave 4 empty slots between each - here every real sample must land in
+    // its own bucket with no other real sample's bucket, and adjacent
+    // samples must be adjacent xs indices (the actual bug: uPlot draws
+    // neither a point nor a line for a real sample stranded between nulls).
+    const data = buildOverviewChartData(
+      [{ id: 't1', name: 'A', host: 'h' }],
+      { t1: [update(0, 10), update(5_000, 12), update(10_000, 11), update(15_000, 9)] },
+      20_000,
+      5_000
+    )
+
+    const sampledIndexes = data.series[0].hasSample
+      .map((has, i) => (has ? i : -1))
+      .filter((i) => i >= 0)
+
+    expect(sampledIndexes).toHaveLength(4)
+    for (let i = 1; i < sampledIndexes.length; i++) {
+      expect(sampledIndexes[i] - sampledIndexes[i - 1]).toBe(1)
+    }
+
+    vi.useRealTimers()
+  })
 })

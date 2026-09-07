@@ -15,6 +15,8 @@ interface IndividualLatencyChartProps {
   targetHost: string
   updates: NetworkUpdate[]
   rangeMs: number
+  /** Current global ping cadence - see `buildOverviewChartData` for why the chart grid must track it. */
+  pingIntervalMs: number
   color: string
   /** Bumped by the parent's shared "Reset zoom" button to re-fit this chart too. */
   resetSignal: number
@@ -89,6 +91,7 @@ function IndividualLatencyChart({
   targetHost,
   updates,
   rangeMs,
+  pingIntervalMs,
   color,
   resetSignal,
   onZoomChange,
@@ -191,7 +194,8 @@ function IndividualLatencyChart({
     const { xs, series } = buildOverviewChartData(
       [{ id: targetId, name: targetName, host: targetHost }],
       { [targetId]: updates },
-      rangeMs
+      rangeMs,
+      pingIntervalMs
     )
     // setData's own resetScales:false path skips uPlot's internal commit()
     // entirely - so without an explicit redraw() below, the canvas simply
@@ -203,7 +207,7 @@ function IndividualLatencyChart({
     // repaint, so every ~1s tick lands as its own smooth, immediate update.
     plot.setData([xs, series[0]?.latency ?? []], false)
     plot.redraw()
-  }, [targetId, targetName, targetHost, updates, rangeMs])
+  }, [targetId, targetName, targetHost, updates, rangeMs, pingIntervalMs])
 
   const fitToRange = (): void => {
     const plot = plotRef.current

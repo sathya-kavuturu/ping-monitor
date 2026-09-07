@@ -192,9 +192,13 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
     [targets, excludedTargetIds]
   )
 
+  // Falls back to the engine's 1s default until the real value loads - see
+  // `buildOverviewChartData` for why the chart grid must track this.
+  const pingIntervalMs = pingIntervalSec !== null ? pingIntervalSec * 1000 : 1000
+
   const overviewData = useMemo(
-    () => buildOverviewChartData(targets, updatesByTarget, rangeMs),
-    [targets, updatesByTarget, rangeMs]
+    () => buildOverviewChartData(targets, updatesByTarget, rangeMs, pingIntervalMs),
+    [targets, updatesByTarget, rangeMs, pingIntervalMs]
   )
   const { xs, series } = overviewData
 
@@ -442,6 +446,7 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
                   targetHost={target.host}
                   updates={updatesByTarget[target.id] ?? []}
                   rangeMs={rangeMs}
+                  pingIntervalMs={pingIntervalMs}
                   color={colorFor(targets.findIndex((t) => t.id === target.id))}
                   resetSignal={resetToken}
                   onZoomChange={handleIndividualZoomChange}
