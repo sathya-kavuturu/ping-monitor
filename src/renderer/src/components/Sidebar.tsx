@@ -65,6 +65,10 @@ function Sidebar({
 
       <h2 className="sidebar-title">Monitored Targets</h2>
 
+      <button type="button" className="add-target-btn" onClick={onOpenAddTarget}>
+        + Add Target
+      </button>
+
       {error && <p className="sidebar-error">{error}</p>}
       {!error && targets.length === 0 && <p className="sidebar-empty">No targets yet</p>}
 
@@ -94,13 +98,6 @@ function Sidebar({
           </li>
         ))}
       </ul>
-
-      <div className="add-target-form">
-        <h3 className="sidebar-subtitle">Add Target</h3>
-        <button type="button" onClick={onOpenAddTarget}>
-          Add Target
-        </button>
-      </div>
 
       {menu && (
         <ContextMenu

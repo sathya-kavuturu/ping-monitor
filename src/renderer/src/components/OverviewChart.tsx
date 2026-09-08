@@ -114,10 +114,6 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
   const plotRef = useRef<uPlot | null>(null)
   const [rangeMs, setRangeMs] = useState(DEFAULT_RANGE_MS)
   const [viewMode, setViewMode] = useState<ViewMode>('combined')
-  // Individual view only: lays every visible target's chart out on a grid
-  // sized to the available viewport height instead of stacking them full-
-  // height, so they're all visible together without scrolling the page.
-  const [fitAllInView, setFitAllInView] = useState(false)
 
   // The applied cadence (seconds) and the raw text of the input - kept
   // separate so an in-progress edit (e.g. a cleared field, or "2.") isn't
@@ -361,10 +357,8 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
   // the plot instance above) changes - not on every data tick.
   useEffect(fitToRange, [rangeMs, targetsKey, viewMode])
 
-  const isFitAllActive = viewMode === 'individual' && fitAllInView
-
   return (
-    <main className={`main-content ${isFitAllActive ? 'main-content--fit-all' : ''}`}>
+    <main className="main-content">
       <header className="main-header">
         <h1>Overview</h1>
         <div className="ping-interval-setting">
@@ -461,14 +455,6 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
                   }}
                   isZoomed={anyIndividualZoomed}
                 />
-                <button
-                  type="button"
-                  className={`view-mode-btn ${fitAllInView ? 'view-mode-btn--active' : ''}`}
-                  onClick={() => setFitAllInView((value) => !value)}
-                  title="Fit every target's graph into the visible area, no scrolling needed"
-                >
-                  {fitAllInView ? 'Exit fit view' : 'Fit all in view'}
-                </button>
               </div>
             </div>
           )}
@@ -481,30 +467,28 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
               <p className="feed-empty">Check a target above to see its latency.</p>
             </section>
           ) : (
-            <div className={isFitAllActive ? 'individual-charts-grid' : 'individual-charts-list'}>
-              {visibleTargets.map((target) => (
-                <section className="feed feed--compact" key={target.id}>
-                  <div className="feed-header-row">
-                    <h2>
-                      {target.name} ({target.host})
-                    </h2>
-                  </div>
-                  <IndividualLatencyChart
-                    targetId={target.id}
-                    targetName={target.name}
-                    targetHost={target.host}
-                    updates={updatesByTarget[target.id] ?? []}
-                    rangeMs={rangeMs}
-                    pingIntervalMs={pingIntervalMs}
-                    color={colorFor(targets.findIndex((t) => t.id === target.id))}
-                    resetSignal={resetToken}
-                    onZoomChange={handleIndividualZoomChange}
-                    syncedRange={syncedRange}
-                    anomalies={anomaliesByTarget.get(target.id) ?? []}
-                  />
-                </section>
-              ))}
-            </div>
+            visibleTargets.map((target) => (
+              <section className="feed feed--compact" key={target.id}>
+                <div className="feed-header-row">
+                  <h2>
+                    {target.name} ({target.host})
+                  </h2>
+                </div>
+                <IndividualLatencyChart
+                  targetId={target.id}
+                  targetName={target.name}
+                  targetHost={target.host}
+                  updates={updatesByTarget[target.id] ?? []}
+                  rangeMs={rangeMs}
+                  pingIntervalMs={pingIntervalMs}
+                  color={colorFor(targets.findIndex((t) => t.id === target.id))}
+                  resetSignal={resetToken}
+                  onZoomChange={handleIndividualZoomChange}
+                  syncedRange={syncedRange}
+                  anomalies={anomaliesByTarget.get(target.id) ?? []}
+                />
+              </section>
+            ))
           )}
         </>
       )}

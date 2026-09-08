@@ -558,36 +558,12 @@ body {
   color: var(--text-muted);
 }
 
-.sidebar-subtitle {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-  margin: 20px 8px 10px;
-}
-
-.add-target-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 0 8px;
-}
-
-.add-target-form input {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  padding: 7px 9px;
-  font-size: 13px;
-}
-
-.add-target-form input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.add-target-form button {
+/* Sits right under the "Monitored Targets" heading, above the list itself,
+   so it's reachable without scrolling past however many targets exist. */
+.add-target-btn {
+  display: block;
+  width: calc(100% - 16px);
+  margin: -8px 8px 16px;
   background: var(--accent);
   border: none;
   border-radius: 6px;
@@ -598,9 +574,8 @@ body {
   cursor: pointer;
 }
 
-.add-target-form button:disabled {
-  opacity: 0.5;
-  cursor: default;
+.add-target-btn:hover {
+  opacity: 0.9;
 }
 
 .feed-header-row {
@@ -852,57 +827,6 @@ body {
 .feed--compact h2 {
   margin-bottom: 0;
   font-size: 12px;
-}
-
-/* "Fit all in view" (individual graphs only): stretches the page to the
-   viewport height and lets the chart row below claim whatever's left, so
-   .individual-charts-grid has a real height to fill instead of growing to
-   fit its content (which is what forces the page to scroll). */
-.main-content--fit-all {
-  display: flex;
-  flex-direction: column;
-}
-
-.individual-charts-list {
-  display: contents;
-}
-
-/* One horizontal row, not a grid - every visible target's chart shrinks in
-   width (down to a legibility floor) so they all sit side by side in a
-   single view instead of wrapping into rows/columns. Only past that floor
-   (many targets at once) does it fall back to horizontal scrolling rather
-   than squeezing charts into illegibility. */
-.individual-charts-grid {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  gap: 12px;
-  flex: 1;
-  min-height: 0;
-  overflow-x: auto;
-}
-
-.individual-charts-grid .feed--compact {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1 1 0;
-  min-width: 160px;
-}
-
-.individual-charts-grid .feed--compact h2 {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.individual-charts-grid .chart-wrap {
-  flex: 1;
-  min-height: 0;
-}
-
-.individual-charts-grid .overview-chart--individual {
-  height: 100%;
 }
 
 .route-meta {
