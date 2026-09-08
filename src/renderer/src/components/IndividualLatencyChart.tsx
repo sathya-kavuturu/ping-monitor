@@ -9,6 +9,14 @@ import ChartAnomalyOverlay, { type AnomalyMarker } from './ChartAnomalyOverlay'
 /** How far below the plot's top edge the anomaly-marker rail sits, in CSS px. */
 const ANOMALY_RAIL_OFFSET = 10
 
+/** The x-axis range one individual chart's drag-zoom produced, broadcast to the rest. */
+export interface SyncedZoomRange {
+  min: number
+  max: number
+  /** targetId of the chart that produced this range - it skips re-applying its own broadcast. */
+  sourceId: string
+}
+
 interface IndividualLatencyChartProps {
   targetId: string
   targetName: string
@@ -20,7 +28,9 @@ interface IndividualLatencyChartProps {
   color: string
   /** Bumped by the parent's shared "Reset zoom" button to re-fit this chart too. */
   resetSignal: number
-  onZoomChange: (targetId: string, isZoomed: boolean) => void
+  onZoomChange: (targetId: string, isZoomed: boolean, min: number, max: number) => void
+  /** Latest drag-zoom range from any individual chart (including this one) - applied to all but the source. */
+  syncedRange: SyncedZoomRange | null
   /** This target's cross-target packet-loss outliers - see `detectPacketLossAnomalies`. */
   anomalies: PacketLossAnomaly[]
 }
@@ -95,6 +105,7 @@ function IndividualLatencyChart({
   color,
   resetSignal,
   onZoomChange,
+  syncedRange,
   anomalies
 }: IndividualLatencyChartProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -108,9 +119,18 @@ function IndividualLatencyChart({
     rangeMsRef.current = rangeMs
   }, [rangeMs])
 
+  // Read inside the setScale hook below, which closes over the plot instance
+  // created once on mount - a ref keeps it seeing the latest callback without
+  // recreating the plot every time the parent re-renders.
+  const onZoomChangeRef = useRef(onZoomChange)
   useEffect(() => {
-    onZoomChange(targetId, isZoomed)
-  }, [targetId, isZoomed, onZoomChange])
+    onZoomChangeRef.current = onZoomChange
+  }, [onZoomChange])
+
+  // True while this chart is applying a range that another chart broadcast -
+  // suppresses re-broadcasting that same change back out, which would
+  // otherwise ping-pong the range between every open chart forever.
+  const isSyncingRef = useRef(false)
 
   const targetLabel = `${targetName} (${targetHost})`
   // Read inside the draw hook below, which closes over the plot instance
@@ -155,7 +175,11 @@ function IndividualLatencyChart({
         color,
         (min, max) => {
           const fullSpanSec = rangeMsRef.current / 1000
-          setIsZoomed(max - min < fullSpanSec - 1)
+          const zoomed = max - min < fullSpanSec - 1
+          setIsZoomed(zoomed)
+          if (!isSyncingRef.current) {
+            onZoomChangeRef.current(targetId, zoomed, min, max)
+          }
         },
         (u) => recomputeMarkers(u)
       ),
@@ -188,6 +212,21 @@ function IndividualLatencyChart({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetId, targetName, targetHost, color])
 
+  // Read inside the data-tick effect below, which must know whether the user
+  // currently has a manual drag-zoom active without re-running (and thus
+  // re-subscribing) on every isZoomed flip.
+  const isZoomedRef = useRef(isZoomed)
+  useEffect(() => {
+    isZoomedRef.current = isZoomed
+  }, [isZoomed])
+
+  const fitToRange = (): void => {
+    const plot = plotRef.current
+    if (!plot) return
+    const now = Date.now()
+    plot.setScale('x', { min: Math.floor((now - rangeMs) / 1000), max: Math.floor(now / 1000) })
+  }
+
   useEffect(() => {
     const plot = plotRef.current
     if (!plot) return
@@ -198,27 +237,43 @@ function IndividualLatencyChart({
       pingIntervalMs
     )
     // setData's own resetScales:false path skips uPlot's internal commit()
-    // entirely - so without an explicit redraw() below, the canvas simply
-    // never repaints on a plain data tick, and the picture only updates in
-    // one big jump whenever some unrelated layout reflow happens to fire the
-    // ResizeObserver above. redraw() (rebuildPaths defaults true) reapplies
-    // the plot's CURRENT x-scale bounds - preserving a manual drag-zoom
-    // instead of re-fitting to the full data range - while still forcing the
-    // repaint, so every ~1s tick lands as its own smooth, immediate update.
+    // entirely - so without an explicit redraw()/setScale() below, the
+    // canvas simply never repaints on a plain data tick, and the picture
+    // only updates in one big jump whenever some unrelated layout reflow
+    // happens to fire the ResizeObserver above.
     plot.setData([xs, series[0]?.latency ?? []], false)
-    plot.redraw()
+    if (isZoomedRef.current) {
+      // A manual drag-zoom is active - redraw() (rebuildPaths defaults true)
+      // reapplies the plot's CURRENT x-scale bounds, preserving that zoom
+      // instead of re-fitting to the full data range, while still forcing
+      // the repaint.
+      plot.redraw()
+    } else {
+      // Unzoomed: `buildOverviewChartData`'s bucket window is a rolling
+      // [now - rangeMs, now] range that slides forward every tick, but a
+      // plain redraw() would keep showing the OLD bounds from the last
+      // fitToRange() call - as the two windows drift apart, buckets that
+      // fell out of the new window simply vanish, which looks like the
+      // line eroding away from its left edge. Re-fitting here keeps the
+      // view following the current time, the way a live chart should.
+      fitToRange()
+    }
   }, [targetId, targetName, targetHost, updates, rangeMs, pingIntervalMs])
-
-  const fitToRange = (): void => {
-    const plot = plotRef.current
-    if (!plot) return
-    const now = Date.now()
-    plot.setScale('x', { min: Math.floor((now - rangeMs) / 1000), max: Math.floor(now / 1000) })
-  }
 
   // Re-fit on a new range preset, or when the parent's shared "Reset zoom"
   // button bumps resetSignal - not on every data tick.
   useEffect(fitToRange, [rangeMs, targetId, resetSignal])
+
+  // Mirror another chart's drag-zoom onto this one, so selecting a range in
+  // any individual graph zooms all of them together. Skips self - this
+  // chart's own drag already has the range applied by uPlot's cursor drag.
+  useEffect(() => {
+    const plot = plotRef.current
+    if (!plot || !syncedRange || syncedRange.sourceId === targetId) return
+    isSyncingRef.current = true
+    plot.setScale('x', { min: syncedRange.min, max: syncedRange.max })
+    isSyncingRef.current = false
+  }, [syncedRange, targetId])
 
   return (
     <div className="chart-wrap">

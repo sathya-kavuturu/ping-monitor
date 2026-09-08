@@ -8,7 +8,7 @@ import { DEFAULT_RANGE_MS } from '../lib/chart-data'
 import { detectPacketLossAnomalies, type PacketLossAnomaly } from '../lib/packet-loss-anomaly'
 import { plotOffsetCss } from '../lib/uplot-position'
 import TimeRangeControls from './TimeRangeControls'
-import IndividualLatencyChart from './IndividualLatencyChart'
+import IndividualLatencyChart, { type SyncedZoomRange } from './IndividualLatencyChart'
 import ChartAnomalyOverlay, { type AnomalyMarker } from './ChartAnomalyOverlay'
 
 /** How far below the plot's top edge the anomaly-marker rail sits, in CSS px. */
@@ -114,6 +114,10 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
   const plotRef = useRef<uPlot | null>(null)
   const [rangeMs, setRangeMs] = useState(DEFAULT_RANGE_MS)
   const [viewMode, setViewMode] = useState<ViewMode>('combined')
+  // Individual view only: lays every visible target's chart out on a grid
+  // sized to the available viewport height instead of stacking them full-
+  // height, so they're all visible together without scrolling the page.
+  const [fitAllInView, setFitAllInView] = useState(false)
 
   // The applied cadence (seconds) and the raw text of the input - kept
   // separate so an in-progress edit (e.g. a cleared field, or "2.") isn't
@@ -167,16 +171,25 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
   const [zoomedTargetIds, setZoomedTargetIds] = useState<Set<string>>(new Set())
   const [resetToken, setResetToken] = useState(0)
 
-  const handleIndividualZoomChange = useCallback((targetId: string, isZoomed: boolean): void => {
-    setZoomedTargetIds((prev) => {
-      const wasZoomed = prev.has(targetId)
-      if (wasZoomed === isZoomed) return prev
-      const next = new Set(prev)
-      if (isZoomed) next.add(targetId)
-      else next.delete(targetId)
-      return next
-    })
-  }, [])
+  // The most recent drag-zoom range from any individual chart - broadcast
+  // back down to all of them so a zoom on one target's graph applies to the
+  // rest too, instead of only tracking that target's own zoom state.
+  const [syncedRange, setSyncedRange] = useState<SyncedZoomRange | null>(null)
+
+  const handleIndividualZoomChange = useCallback(
+    (targetId: string, isZoomed: boolean, min: number, max: number): void => {
+      setZoomedTargetIds((prev) => {
+        const wasZoomed = prev.has(targetId)
+        if (wasZoomed === isZoomed) return prev
+        const next = new Set(prev)
+        if (isZoomed) next.add(targetId)
+        else next.delete(targetId)
+        return next
+      })
+      setSyncedRange({ min, max, sourceId: targetId })
+    },
+    []
+  )
 
   const toggleTarget = (id: string): void => {
     setExcludedTargetIds((prev) => {
@@ -300,22 +313,13 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetsKey, viewMode])
 
+  // Read inside the data-tick effect below, which must know whether the user
+  // currently has a manual drag-zoom active without re-running (and thus
+  // re-subscribing) on every isCombinedZoomed flip.
+  const isCombinedZoomedRef = useRef(isCombinedZoomed)
   useEffect(() => {
-    if (viewMode !== 'combined') return
-    const plot = plotRef.current
-    if (!plot) return
-    // setData's own resetScales:false path skips uPlot's internal commit()
-    // entirely - so without an explicit redraw() below, the canvas simply
-    // never repaints on a plain data tick, and the picture only updates in
-    // one big jump whenever some unrelated layout reflow happens to fire the
-    // ResizeObserver above. redraw() (rebuildPaths defaults true) reapplies
-    // the plot's CURRENT x-scale bounds - preserving a manual drag-zoom
-    // instead of re-fitting to the full data range - while still forcing the
-    // repaint, so every ~1s tick lands as its own smooth, immediate update
-    // (which in turn fires the `draw` hook that recomputes marker positions).
-    plot.setData([xs, ...series.map((s) => s.latency)], false)
-    plot.redraw()
-  }, [xs, series, viewMode])
+    isCombinedZoomedRef.current = isCombinedZoomed
+  }, [isCombinedZoomed])
 
   const fitToRange = (): void => {
     const plot = plotRef.current
@@ -324,12 +328,43 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
     plot.setScale('x', { min: Math.floor((now - rangeMs) / 1000), max: Math.floor(now / 1000) })
   }
 
+  useEffect(() => {
+    if (viewMode !== 'combined') return
+    const plot = plotRef.current
+    if (!plot) return
+    // setData's own resetScales:false path skips uPlot's internal commit()
+    // entirely - so without an explicit redraw()/setScale() below, the
+    // canvas simply never repaints on a plain data tick, and the picture
+    // only updates in one big jump whenever some unrelated layout reflow
+    // happens to fire the ResizeObserver above.
+    plot.setData([xs, ...series.map((s) => s.latency)], false)
+    if (isCombinedZoomedRef.current) {
+      // A manual drag-zoom is active - redraw() (rebuildPaths defaults true)
+      // reapplies the plot's CURRENT x-scale bounds, preserving that zoom
+      // instead of re-fitting to the full data range, while still forcing
+      // the repaint (which in turn fires the `draw` hook that recomputes
+      // marker positions).
+      plot.redraw()
+    } else {
+      // Unzoomed: `buildOverviewChartData`'s bucket window is a rolling
+      // [now - rangeMs, now] range that slides forward every tick, but a
+      // plain redraw() would keep showing the OLD bounds from the last
+      // fitToRange() call - as the two windows drift apart, buckets that
+      // fell out of the new window simply vanish, which looks like the
+      // lines eroding away from their left edge. Re-fitting here keeps the
+      // view following the current time, the way a live chart should.
+      fitToRange()
+    }
+  }, [xs, series, viewMode])
+
   // Re-fit whenever the selected preset (or the target set, which rebuilds
   // the plot instance above) changes - not on every data tick.
   useEffect(fitToRange, [rangeMs, targetsKey, viewMode])
 
+  const isFitAllActive = viewMode === 'individual' && fitAllInView
+
   return (
-    <main className="main-content">
+    <main className={`main-content ${isFitAllActive ? 'main-content--fit-all' : ''}`}>
       <header className="main-header">
         <h1>Overview</h1>
         <div className="ping-interval-setting">
@@ -416,12 +451,25 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
           {targets.length > 0 && (
             <div className="feed-header-row individual-charts-header">
               <h2>Latency by target</h2>
-              <TimeRangeControls
-                rangeMs={rangeMs}
-                onSelectRange={setRangeMs}
-                onResetZoom={() => setResetToken((token) => token + 1)}
-                isZoomed={anyIndividualZoomed}
-              />
+              <div className="feed-header-actions">
+                <TimeRangeControls
+                  rangeMs={rangeMs}
+                  onSelectRange={setRangeMs}
+                  onResetZoom={() => {
+                    setResetToken((token) => token + 1)
+                    setSyncedRange(null)
+                  }}
+                  isZoomed={anyIndividualZoomed}
+                />
+                <button
+                  type="button"
+                  className={`view-mode-btn ${fitAllInView ? 'view-mode-btn--active' : ''}`}
+                  onClick={() => setFitAllInView((value) => !value)}
+                  title="Fit every target's graph into the visible area, no scrolling needed"
+                >
+                  {fitAllInView ? 'Exit fit view' : 'Fit all in view'}
+                </button>
+              </div>
             </div>
           )}
           {targets.length === 0 ? (
@@ -433,27 +481,30 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
               <p className="feed-empty">Check a target above to see its latency.</p>
             </section>
           ) : (
-            visibleTargets.map((target) => (
-              <section className="feed feed--compact" key={target.id}>
-                <div className="feed-header-row">
-                  <h2>
-                    {target.name} ({target.host})
-                  </h2>
-                </div>
-                <IndividualLatencyChart
-                  targetId={target.id}
-                  targetName={target.name}
-                  targetHost={target.host}
-                  updates={updatesByTarget[target.id] ?? []}
-                  rangeMs={rangeMs}
-                  pingIntervalMs={pingIntervalMs}
-                  color={colorFor(targets.findIndex((t) => t.id === target.id))}
-                  resetSignal={resetToken}
-                  onZoomChange={handleIndividualZoomChange}
-                  anomalies={anomaliesByTarget.get(target.id) ?? []}
-                />
-              </section>
-            ))
+            <div className={isFitAllActive ? 'individual-charts-grid' : 'individual-charts-list'}>
+              {visibleTargets.map((target) => (
+                <section className="feed feed--compact" key={target.id}>
+                  <div className="feed-header-row">
+                    <h2>
+                      {target.name} ({target.host})
+                    </h2>
+                  </div>
+                  <IndividualLatencyChart
+                    targetId={target.id}
+                    targetName={target.name}
+                    targetHost={target.host}
+                    updates={updatesByTarget[target.id] ?? []}
+                    rangeMs={rangeMs}
+                    pingIntervalMs={pingIntervalMs}
+                    color={colorFor(targets.findIndex((t) => t.id === target.id))}
+                    resetSignal={resetToken}
+                    onZoomChange={handleIndividualZoomChange}
+                    syncedRange={syncedRange}
+                    anomalies={anomaliesByTarget.get(target.id) ?? []}
+                  />
+                </section>
+              ))}
+            </div>
           )}
         </>
       )}
