@@ -5,9 +5,9 @@ interface HelpDialogProps {
 }
 
 /**
- * Opened by the "?" button fixed at the top of the window (see `App`) - the
- * one help entry point available from every view, since there's no single
- * shared top nav bar to hang it on otherwise.
+ * Opened by the "Help" item in the sidebar's Views list (see `Sidebar`) -
+ * that list is always visible regardless of which target/tab is selected,
+ * so it's the one persistent nav element to hang a help entry point on.
  */
 function HelpDialog({ onClose }: HelpDialogProps): React.JSX.Element {
   return (

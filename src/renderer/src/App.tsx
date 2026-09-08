@@ -234,14 +234,6 @@ function App(): React.JSX.Element {
           />
         </svg>
       </button>
-      <button
-        type="button"
-        className="help-toggle"
-        onClick={() => setIsHelpOpen(true)}
-        aria-label="Help"
-      >
-        ?
-      </button>
       <Sidebar
         isOpen={sidebarOpen}
         targets={targets}
@@ -250,6 +242,7 @@ function App(): React.JSX.Element {
         onSelectTarget={handleSelectTarget}
         onSelectView={handleSelectView}
         onOpenAddTarget={handleOpenAddTarget}
+        onOpenHelp={() => setIsHelpOpen(true)}
         onEditTarget={handleOpenEditTarget}
         onDeleteTarget={handleRequestDeleteTarget}
         error={loadError}

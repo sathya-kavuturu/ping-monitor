@@ -298,30 +298,6 @@ body {
   border-color: var(--accent);
 }
 
-.help-toggle {
-  position: fixed;
-  top: 14px;
-  right: 14px;
-  z-index: 60;
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  color: var(--text-muted);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.help-toggle:hover {
-  color: var(--text);
-  border-color: var(--accent);
-}
-
 .sidebar {
   width: 260px;
   flex-shrink: 0;
@@ -462,10 +438,6 @@ body {
   align-items: center;
   gap: 12px;
   margin-bottom: 20px;
-  /* Clears the fixed help ("?") button pinned at the window's top-right -
-     otherwise right-aligned header content (e.g. Overview's view-mode
-     toggle, pushed there by `margin-left: auto`) sits right underneath it. */
-  padding-right: 20px;
 }
 
 .main-header h1 {

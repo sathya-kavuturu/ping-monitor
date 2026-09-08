@@ -10,6 +10,7 @@ interface SidebarProps {
   onSelectTarget: (id: string) => void
   onSelectView: (view: MainView) => void
   onOpenAddTarget: () => void
+  onOpenHelp: () => void
   onEditTarget: (target: TargetWithStatus) => void
   onDeleteTarget: (target: TargetWithStatus) => void
   error: string | null
@@ -29,6 +30,7 @@ function Sidebar({
   onSelectTarget,
   onSelectView,
   onOpenAddTarget,
+  onOpenHelp,
   onEditTarget,
   onDeleteTarget,
   error
@@ -58,6 +60,13 @@ function Sidebar({
           >
             <span className="target-info">
               <span className="target-name">Overview</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" className="target-item" onClick={onOpenHelp}>
+            <span className="target-info">
+              <span className="target-name">Help</span>
             </span>
           </button>
         </li>
