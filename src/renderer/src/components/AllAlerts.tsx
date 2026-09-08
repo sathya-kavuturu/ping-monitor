@@ -125,6 +125,51 @@ function AllAlerts({ targets }: AllAlertsProps): React.JSX.Element {
         <p className="feed-empty">Add a target to configure alerts for it.</p>
       )}
 
+      {targets.length > 0 && (
+        <section className="feed">
+          <h2>Add Alert Rule</h2>
+          <form className="alert-rule-form" onSubmit={handleSubmit}>
+            <select
+              value={formTargetId}
+              onChange={(event) => setFormTargetId(event.target.value)}
+              disabled={isSaving}
+            >
+              {targets.map((target) => (
+                <option key={target.id} value={target.id}>
+                  {target.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={metric}
+              onChange={(event) => setMetric(event.target.value as AlertMetric)}
+              disabled={isSaving}
+            >
+              {METRIC_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <span className="alert-rule-form-operator">&gt;</span>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              placeholder={selectedMeta.placeholder}
+              value={threshold}
+              onChange={(event) => setThreshold(event.target.value)}
+              disabled={isSaving}
+            />
+            <span className="alert-rule-form-unit">{selectedMeta.unit}</span>
+            <button type="submit" disabled={isSaving || !threshold}>
+              Add
+            </button>
+          </form>
+          {formError && <p className="sidebar-error">{formError}</p>}
+        </section>
+      )}
+
       {targets.map((target) => {
         const targetRules = rulesByTarget.get(target.id) ?? []
         return (
@@ -172,51 +217,6 @@ function AllAlerts({ targets }: AllAlertsProps): React.JSX.Element {
           </section>
         )
       })}
-
-      {targets.length > 0 && (
-        <section className="feed">
-          <h2>Add Alert Rule</h2>
-          <form className="alert-rule-form" onSubmit={handleSubmit}>
-            <select
-              value={formTargetId}
-              onChange={(event) => setFormTargetId(event.target.value)}
-              disabled={isSaving}
-            >
-              {targets.map((target) => (
-                <option key={target.id} value={target.id}>
-                  {target.name}
-                </option>
-              ))}
-            </select>
-            <select
-              value={metric}
-              onChange={(event) => setMetric(event.target.value as AlertMetric)}
-              disabled={isSaving}
-            >
-              {METRIC_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <span className="alert-rule-form-operator">&gt;</span>
-            <input
-              type="number"
-              min="0"
-              step="any"
-              placeholder={selectedMeta.placeholder}
-              value={threshold}
-              onChange={(event) => setThreshold(event.target.value)}
-              disabled={isSaving}
-            />
-            <span className="alert-rule-form-unit">{selectedMeta.unit}</span>
-            <button type="submit" disabled={isSaving || !threshold}>
-              Add
-            </button>
-          </form>
-          {formError && <p className="sidebar-error">{formError}</p>}
-        </section>
-      )}
     </main>
   )
 }

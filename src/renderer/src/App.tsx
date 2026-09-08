@@ -7,7 +7,7 @@ import type {
   TargetStatus,
   UpdateTargetInput
 } from '../../shared/types'
-import { CHART_WINDOW_MS } from './lib/chart-data'
+import { CHART_WINDOW_MS, DEFAULT_HISTORY_RANGE_MS } from './lib/chart-data'
 import Sidebar from './components/Sidebar'
 import MainContent from './components/MainContent'
 import AllAlerts from './components/AllAlerts'
@@ -45,6 +45,7 @@ function App(): React.JSX.Element {
 
   const [pingHistory, setPingHistory] = useState<PingHistoryRecord[]>([])
   const [historyError, setHistoryError] = useState<string | null>(null)
+  const [historyRangeMs, setHistoryRangeMs] = useState(DEFAULT_HISTORY_RANGE_MS)
 
   useEffect(() => {
     let cancelled = false
@@ -86,10 +87,12 @@ function App(): React.JSX.Element {
     return unsubscribe
   }, [])
 
-  const loadPingHistory = useCallback((targetId: string) => {
+  const loadPingHistory = useCallback((targetId: string, rangeMs: number) => {
     setHistoryError(null)
+    const to = new Date()
+    const from = new Date(to.getTime() - rangeMs)
     window.api
-      .getPingHistory({ targetId })
+      .getPingHistory({ targetId, from, to })
       .then(setPingHistory)
       .catch((error: unknown) => {
         setHistoryError(error instanceof Error ? error.message : 'Failed to load ping history')
@@ -101,8 +104,12 @@ function App(): React.JSX.Element {
       setPingHistory([])
       return
     }
-    loadPingHistory(selectedTargetId)
-  }, [selectedTargetId, loadPingHistory])
+    loadPingHistory(selectedTargetId, historyRangeMs)
+  }, [selectedTargetId, historyRangeMs, loadPingHistory])
+
+  const handleSelectHistoryRange = useCallback((rangeMs: number) => {
+    setHistoryRangeMs(rangeMs)
+  }, [])
 
   const handleSelectTarget = useCallback((id: string) => {
     setSelectedTargetId(id)
@@ -201,8 +208,8 @@ function App(): React.JSX.Element {
   }, [pendingDeleteTarget, targets])
 
   const handleRefreshHistory = useCallback(() => {
-    if (selectedTargetId) loadPingHistory(selectedTargetId)
-  }, [selectedTargetId, loadPingHistory])
+    if (selectedTargetId) loadPingHistory(selectedTargetId, historyRangeMs)
+  }, [selectedTargetId, historyRangeMs, loadPingHistory])
 
   const selectedTarget = targets.find((target) => target.id === selectedTargetId) ?? null
   const liveUpdates = selectedTargetId ? (updatesByTarget[selectedTargetId] ?? []) : []
@@ -244,6 +251,8 @@ function App(): React.JSX.Element {
           pingHistory={pingHistory}
           historyError={historyError}
           onRefreshHistory={handleRefreshHistory}
+          historyRangeMs={historyRangeMs}
+          onSelectHistoryRange={handleSelectHistoryRange}
         />
       )}
       {mainView === 'alerts' && <AllAlerts targets={targets} />}

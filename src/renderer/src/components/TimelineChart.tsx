@@ -149,23 +149,13 @@ function TimelineChart({ updates }: TimelineChartProps): React.JSX.Element {
     }
   }, [])
 
+  // Read inside the data-tick effect below, which must know whether the user
+  // currently has a manual drag-zoom active without re-running (and thus
+  // re-subscribing) on every isZoomed flip.
+  const isZoomedRef = useRef(isZoomed)
   useEffect(() => {
-    const plot = plotRef.current
-    if (!plot) return
-    const cutoff = Date.now() - rangeMs
-    const inRange = updates.filter((update) => update.timestamp >= cutoff)
-    const series = buildChartSeries(inRange)
-    // setData's own resetScales:false path skips uPlot's internal commit()
-    // entirely - so without an explicit redraw() below, the canvas simply
-    // never repaints on a plain data tick, and the picture only updates in
-    // one big jump whenever some unrelated layout reflow happens to fire the
-    // ResizeObserver above. redraw() (rebuildPaths defaults true) reapplies
-    // the plot's CURRENT x-scale bounds - preserving a manual drag-zoom
-    // instead of re-fitting to the full data range - while still forcing the
-    // repaint, so every ~1s tick lands as its own smooth, immediate update.
-    plot.setData([series.xs, series.latency, series.lossPercent], false)
-    plot.redraw()
-  }, [updates, rangeMs])
+    isZoomedRef.current = isZoomed
+  }, [isZoomed])
 
   const fitToRange = (): void => {
     const plot = plotRef.current
@@ -173,6 +163,37 @@ function TimelineChart({ updates }: TimelineChartProps): React.JSX.Element {
     const now = Date.now()
     plot.setScale('x', { min: Math.floor((now - rangeMs) / 1000), max: Math.floor(now / 1000) })
   }
+
+  useEffect(() => {
+    const plot = plotRef.current
+    if (!plot) return
+    const cutoff = Date.now() - rangeMs
+    const inRange = updates.filter((update) => update.timestamp >= cutoff)
+    const series = buildChartSeries(inRange)
+    // setData's own resetScales:false path skips uPlot's internal commit()
+    // entirely - so without an explicit redraw()/setScale() below, the
+    // canvas simply never repaints on a plain data tick, and the picture
+    // only updates in one big jump whenever some unrelated layout reflow
+    // happens to fire the ResizeObserver above.
+    plot.setData([series.xs, series.latency, series.lossPercent], false)
+    if (isZoomedRef.current) {
+      // A manual drag-zoom is active - redraw() (rebuildPaths defaults true)
+      // reapplies the plot's CURRENT x-scale bounds, preserving that zoom
+      // instead of re-fitting to the full data range, while still forcing
+      // the repaint.
+      plot.redraw()
+    } else {
+      // Unzoomed: `cutoff` above is a rolling [now - rangeMs, now] window
+      // that slides forward every tick, but a plain redraw() would keep
+      // showing the OLD bounds from the last fitToRange() call - as the two
+      // windows drift apart, samples that fell out of the new window simply
+      // vanish, which looks like the line eroding away from its left edge
+      // (and, left unfit for long enough, the chart going fully blank once
+      // every sample ages out of the frozen window). Re-fitting here keeps
+      // the view following the current time, the way a live chart should.
+      fitToRange()
+    }
+  }, [updates, rangeMs])
 
   // Re-fit whenever the selected preset changes (not on every data tick).
   useEffect(fitToRange, [rangeMs])

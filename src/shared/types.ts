@@ -87,6 +87,18 @@ export interface HopHistoryQuery {
   limit?: number
 }
 
+/**
+ * Hosting/ownership info for one hop's public IP (ISP, organization, ASN) -
+ * looked up on demand per address, not stored on `HopSample`/`HopRecord`
+ * (see `src/main/network/ip-hosting.ts`). `null` means the address is
+ * private/reserved (never looked up) or the lookup failed/found nothing.
+ */
+export interface HopHostingInfo {
+  isp: string | null
+  org: string | null
+  asn: string | null
+}
+
 /** What an `AlertRule` watches: rolling packet-loss % or rolling avg latency (ms). */
 export type AlertMetric = 'packet_loss' | 'latency'
 
@@ -140,6 +152,8 @@ export interface ExposedApi {
   deleteTarget: (id: string) => Promise<void>
   /** Resolves a DNS name (or IP literal, returned unchanged) to an IP address, or `null` if it can't be resolved. */
   resolveHostname: (host: string) => Promise<string | null>
+  /** Looks up hosting/ISP info for a route hop's public IP - see `HopHostingInfo`. */
+  resolveHopHosting: (address: string) => Promise<HopHostingInfo | null>
   getPingHistory: (query: PingHistoryQuery) => Promise<PingHistoryRecord[]>
   getHopHistory: (query: HopHistoryQuery) => Promise<HopRecord[]>
   /** Omit `targetId` to list alert rules across every target (used by the consolidated Alerts view). */

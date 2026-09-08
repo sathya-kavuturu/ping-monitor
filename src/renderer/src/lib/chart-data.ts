@@ -21,7 +21,21 @@ export const RANGE_PRESETS: RangePreset[] = [
   { label: '2h', ms: 2 * 60 * 60 * 1000 }
 ]
 
-export const DEFAULT_RANGE_MS = RANGE_PRESETS[1].ms
+export const DEFAULT_RANGE_MS = RANGE_PRESETS[0].ms
+
+/**
+ * Range picker for the Ping History chart (see `PingHistoryRangeControls`) -
+ * separate from `RANGE_PRESETS` because history rollups are durable DB rows
+ * (see `getPingHistory`), not the live in-memory buffer `CHART_WINDOW_MS`
+ * bounds, so "how far back can I look" is measured in days, not minutes.
+ */
+export const HISTORY_RANGE_PRESETS: RangePreset[] = [
+  { label: '24h', ms: 24 * 60 * 60 * 1000 },
+  { label: '7d', ms: 7 * 24 * 60 * 60 * 1000 },
+  { label: '30d', ms: 30 * 24 * 60 * 60 * 1000 }
+]
+
+export const DEFAULT_HISTORY_RANGE_MS = HISTORY_RANGE_PRESETS[0].ms
 
 // Trailing-sample window used to smooth the packet-loss series - a raw
 // per-sample 0/100 signal is too spiky to read as a trend at a glance.

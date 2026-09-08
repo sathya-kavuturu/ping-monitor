@@ -12,6 +12,7 @@ import type {
 } from '../shared/types'
 import { NetworkEngine } from './network/engine'
 import { resolveHostname } from './network/forward-dns'
+import { resolveHopHosting } from './network/ip-hosting'
 import { AlertWatchdog } from './alerting/watchdog'
 import { notifyAlertEvent } from './alerting/notifications'
 import { createTray, destroyTray } from './tray'
@@ -256,6 +257,11 @@ function registerIpcHandlers(): void {
   ipcMain.handle(IpcChannels.ResolveHostname, async (event, host: string) => {
     assertTrustedSender(event.senderFrame)
     return resolveHostname(host)
+  })
+
+  ipcMain.handle(IpcChannels.ResolveHopHosting, async (event, address: string) => {
+    assertTrustedSender(event.senderFrame)
+    return resolveHopHosting(address)
   })
 
   ipcMain.handle(IpcChannels.PingHistoryList, async (event, query: PingHistoryQuery) => {

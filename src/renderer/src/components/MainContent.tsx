@@ -4,7 +4,8 @@ import type { TargetWithStatus } from '../App'
 import TimelineChart from './TimelineChart'
 import PathVisualization from './PathVisualization'
 import RouteTable from './RouteTable'
-import PingHistoryTable from './PingHistoryTable'
+import PingHistoryChart from './PingHistoryChart'
+import PingHistoryRangeControls from './PingHistoryRangeControls'
 import Modal from './Modal'
 
 interface MainContentProps {
@@ -13,6 +14,8 @@ interface MainContentProps {
   pingHistory: PingHistoryRecord[]
   historyError: string | null
   onRefreshHistory: () => void
+  historyRangeMs: number
+  onSelectHistoryRange: (ms: number) => void
 }
 
 function formatMs(value: number | null): string {
@@ -30,7 +33,9 @@ function MainContent({
   liveUpdates,
   pingHistory,
   historyError,
-  onRefreshHistory
+  onRefreshHistory,
+  historyRangeMs,
+  onSelectHistoryRange
 }: MainContentProps): React.JSX.Element {
   const latest = liveUpdates[liveUpdates.length - 1]
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false)
@@ -105,6 +110,10 @@ function MainContent({
             <div className="feed-header-row">
               <h2>Ping History (1-min rollups)</h2>
               <div className="feed-header-actions">
+                <PingHistoryRangeControls
+                  rangeMs={historyRangeMs}
+                  onSelectRange={onSelectHistoryRange}
+                />
                 <button type="button" className="refresh-btn" onClick={onRefreshHistory}>
                   Refresh
                 </button>
@@ -117,7 +126,7 @@ function MainContent({
                 </button>
               </div>
             </div>
-            <PingHistoryTable pingHistory={pingHistory} historyError={historyError} />
+            <PingHistoryChart pingHistory={pingHistory} historyError={historyError} />
           </section>
 
           {isHistoryExpanded && (
@@ -127,6 +136,10 @@ function MainContent({
               className="modal-card--wide"
             >
               <div className="modal-actions modal-actions--start">
+                <PingHistoryRangeControls
+                  rangeMs={historyRangeMs}
+                  onSelectRange={onSelectHistoryRange}
+                />
                 <button type="button" className="refresh-btn" onClick={onRefreshHistory}>
                   Refresh
                 </button>
@@ -138,7 +151,7 @@ function MainContent({
                   Merge back into tab
                 </button>
               </div>
-              <PingHistoryTable pingHistory={pingHistory} historyError={historyError} expanded />
+              <PingHistoryChart pingHistory={pingHistory} historyError={historyError} expanded />
             </Modal>
           )}
         </>

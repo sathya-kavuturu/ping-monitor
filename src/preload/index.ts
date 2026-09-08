@@ -18,6 +18,8 @@ const api: ExposedApi = {
 
   resolveHostname: (host) => ipcRenderer.invoke(IpcChannels.ResolveHostname, host),
 
+  resolveHopHosting: (address) => ipcRenderer.invoke(IpcChannels.ResolveHopHosting, address),
+
   getPingHistory: (query) => ipcRenderer.invoke(IpcChannels.PingHistoryList, query),
 
   getHopHistory: (query) => ipcRenderer.invoke(IpcChannels.HopHistoryList, query),

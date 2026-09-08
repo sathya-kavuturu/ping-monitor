@@ -58,8 +58,30 @@ export async function savePingRollup(input: PingRollupInput): Promise<PingHistor
   })
 }
 
+// Default cap when no explicit range is given, and the floor for a
+// range-derived one - about 8.3 hours of 1-minute rollups.
+const DEFAULT_LIMIT = 500
+// Rollups are cheap, dense rows in a local SQLite DB, but this still bounds
+// a single query - comfortably above the 30-day preset's ~43,200 rows.
+const MAX_LIMIT = 50_000
+
 export async function getPingHistory(query: PingHistoryQuery): Promise<PingHistory[]> {
-  const { targetId, from, to, limit = 500 } = query
+  const { targetId, from, to } = query
+
+  // An explicit `from`/`to` (the history chart's day/week/month presets)
+  // needs a limit sized to the range itself - the flat 500-row default
+  // would silently truncate a 7-day or 30-day window down to its most
+  // recent ~8 hours. Only fall back to the flat default for an unbounded
+  // (no from/to) query.
+  let limit = query.limit
+  if (limit === undefined) {
+    if (from && to) {
+      const rangeMinutes = Math.ceil((to.getTime() - from.getTime()) / 60_000)
+      limit = Math.min(Math.max(rangeMinutes + 5, DEFAULT_LIMIT), MAX_LIMIT)
+    } else {
+      limit = DEFAULT_LIMIT
+    }
+  }
 
   // Ordering by 'asc' and taking `limit` would return the OLDEST rows in
   // range, not the most recent ones - harmless for a target only a few
