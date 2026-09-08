@@ -1,10 +1,12 @@
 import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
-import type { NetworkUpdate } from '../../../shared/types'
+import type { HopHostingInfo, NetworkUpdate } from '../../../shared/types'
 import { buildPathGraph, YOU_HOP_NUMBER, type PathEdge, type PathNode } from '../lib/path-graph'
 
 interface PathVisualizationProps {
   updates: NetworkUpdate[]
   targetName: string
+  /** Hosting/ISP info per hop address - see `useHopHosting` (owned by `MainContent`, shared with `RouteTable`). */
+  hostingByAddress: Map<string, HopHostingInfo | null>
 }
 
 type NodeStatus = 'online' | 'degraded' | 'silent'
@@ -70,8 +72,12 @@ function youNode(totalRuns: number): PathNode {
  * ThousandEyes-style path view: your device -> one node per router hop ->
  * the target, colored by that hop's health, with the worst hop(s) called
  * out with a ring + badge rather than just a color a user might scroll
- * past. Pure client-side derivation of the same live update stream
- * `RouteTable` uses - no geolocation, no data ever leaves the machine.
+ * past. The graph topology itself is a pure client-side derivation of the
+ * same live update stream `RouteTable` uses - no geolocation involved in
+ * building it. The hover tooltip's "Hosting" row is the one exception: it
+ * comes from `hostingByAddress` (see `useHopHosting`), an on-demand lookup
+ * against a third-party IP-info API, shared with `RouteTable` so a given
+ * hop address is only ever looked up once.
  *
  * Unlike a flat single-vantage-point trace, a hop can render as several
  * parallel nodes when repeated traceroute runs disagree on which address
@@ -87,7 +93,11 @@ function youNode(totalRuns: number): PathNode {
  * of that row gets silently clipped by its own container. `fixed`
  * positioning escapes that entirely since it's relative to the viewport.
  */
-function PathVisualization({ updates, targetName }: PathVisualizationProps): React.JSX.Element {
+function PathVisualization({
+  updates,
+  targetName,
+  hostingByAddress
+}: PathVisualizationProps): React.JSX.Element {
   const graph = useMemo(() => buildPathGraph(updates), [updates])
   const you = useMemo(() => youNode(graph.runCount), [graph.runCount])
 
@@ -259,6 +269,19 @@ function PathVisualization({ updates, targetName }: PathVisualizationProps): Rea
               <span>{hover.node.hostname}</span>
             </div>
           )}
+          {hover.node.address &&
+            (() => {
+              const hosting = hostingByAddress.get(hover.node.address)
+              const label = hosting?.org ?? hosting?.isp
+              return (
+                label && (
+                  <div className="path-tooltip-row">
+                    <span>Hosting</span>
+                    <span>{label}</span>
+                  </div>
+                )
+              )
+            })()}
           <div className="path-tooltip-row">
             <span>Avg Response</span>
             <span>{formatMs(hover.node.latencyMs)}</span>

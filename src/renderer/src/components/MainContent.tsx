@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { NetworkUpdate, PingHistoryRecord } from '../../../shared/types'
 import type { TargetWithStatus } from '../App'
+import { useHopHosting } from '../lib/use-hop-hosting'
 import TimelineChart from './TimelineChart'
 import PathVisualization from './PathVisualization'
 import RouteTable from './RouteTable'
@@ -65,6 +66,27 @@ function MainContent({
 
   useEffect(() => setIsHistoryExpanded(false), [target?.id])
 
+  // Shared across `PathVisualization` and `RouteTable` (both derived from
+  // the same `liveUpdates`) so a given hop address is only ever looked up
+  // once - see `useHopHosting`. Stabilized through a joined-string key
+  // (same trick as `targetsKey` in `OverviewChart`) so the ~1s tick that
+  // gives `liveUpdates` a new array identity doesn't also give the address
+  // list a new identity when the actual set of addresses hasn't changed.
+  const hopAddressesKey = useMemo(() => {
+    const set = new Set<string>()
+    for (const update of liveUpdates) {
+      for (const hop of update.hops) {
+        if (hop.address) set.add(hop.address)
+      }
+    }
+    return Array.from(set).sort().join(',')
+  }, [liveUpdates])
+  const hopAddresses = useMemo(
+    () => (hopAddressesKey ? hopAddressesKey.split(',') : []),
+    [hopAddressesKey]
+  )
+  const hostingByAddress = useHopHosting(hopAddresses)
+
   return (
     <main className="main-content">
       <header className="main-header">
@@ -102,13 +124,18 @@ function MainContent({
             key={`path-${target.id}`}
             updates={liveUpdates}
             targetName={target.name}
+            hostingByAddress={hostingByAddress}
           />
 
-          <RouteTable key={`route-${target.id}`} updates={liveUpdates} />
+          <RouteTable
+            key={`route-${target.id}`}
+            updates={liveUpdates}
+            hostingByAddress={hostingByAddress}
+          />
 
           <section className="feed">
             <div className="feed-header-row">
-              <h2>Ping History (1-min rollups)</h2>
+              <h2>Ping History</h2>
               <div className="feed-header-actions">
                 <PingHistoryRangeControls
                   rangeMs={historyRangeMs}
@@ -131,7 +158,7 @@ function MainContent({
 
           {isHistoryExpanded && (
             <Modal
-              title="Ping History (1-min rollups)"
+              title="Ping History"
               onClose={() => setIsHistoryExpanded(false)}
               className="modal-card--wide"
             >

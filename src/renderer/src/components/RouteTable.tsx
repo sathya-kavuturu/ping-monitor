@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import type { HopHostingInfo, NetworkUpdate } from '../../../shared/types'
 import { buildRouteTable } from '../lib/route-table'
 import Sparkline from './Sparkline'
 
 interface RouteTableProps {
   updates: NetworkUpdate[]
+  /** Hosting/ISP info per hop address - see `useHopHosting` (owned by `MainContent`, shared with `PathVisualization`). */
+  hostingByAddress: Map<string, HopHostingInfo | null>
 }
 
 function formatMs(value: number | null): string {
@@ -23,42 +25,8 @@ function formatAge(capturedAt: number | null): string {
  * whether a hop is reliably answering, not just its single latest reply.
  * Driven entirely by the live `network:update` stream - no DB round trip.
  */
-function RouteTable({ updates }: RouteTableProps): React.JSX.Element {
+function RouteTable({ updates, hostingByAddress }: RouteTableProps): React.JSX.Element {
   const { rows, runCount, latestCapturedAt } = useMemo(() => buildRouteTable(updates), [updates])
-
-  // Hosting/ISP info per hop address (see `HopHostingInfo`) - fetched lazily
-  // and cached here rather than baked into `buildRouteTable`'s output, since
-  // it comes from an on-demand IPC lookup (ip-api.com), not the live update
-  // stream. `null` means looked up and found nothing (or a private address);
-  // absent means not looked up yet.
-  const [hostingByAddress, setHostingByAddress] = useState<Map<string, HopHostingInfo | null>>(
-    new Map()
-  )
-
-  useEffect(() => {
-    const addresses = Array.from(
-      new Set(rows.map((row) => row.address).filter((address): address is string => address !== null))
-    )
-    const unresolved = addresses.filter((address) => !hostingByAddress.has(address))
-    if (unresolved.length === 0) return
-
-    let cancelled = false
-    Promise.all(
-      unresolved.map((address) =>
-        window.api.resolveHopHosting(address).then((info) => [address, info] as const)
-      )
-    ).then((results) => {
-      if (cancelled) return
-      setHostingByAddress((prev) => {
-        const next = new Map(prev)
-        for (const [address, info] of results) next.set(address, info)
-        return next
-      })
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [rows, hostingByAddress])
 
   return (
     <section className="feed">
