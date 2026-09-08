@@ -109,6 +109,21 @@ function createWindow(): void {
     mainWindow?.show()
   })
 
+  // Electron's built-in "Zoom In" accelerator (CmdOrCtrl+Plus) only fires
+  // when the "+" character is actually produced (Shift+=) - on most
+  // keyboards, pressing Ctrl and the "+/=" key without Shift sends "="
+  // instead, which doesn't match, so zoom-in silently does nothing. Zoom
+  // Out's "-" needs no Shift so it's never ambiguous, which is why only
+  // zooming in feels broken. Patch just that one gap; every other shortcut
+  // (including Ctrl+Shift+= and Ctrl+-) already works via Electron's default.
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' || input.key !== '=' || input.shift || input.alt) return
+    const zoomModifierDown = process.platform === 'darwin' ? input.meta : input.control
+    if (!zoomModifierDown) return
+    mainWindow?.webContents.setZoomLevel(mainWindow.webContents.getZoomLevel() + 0.5)
+    event.preventDefault()
+  })
+
   // Open all target="_blank" / window.open links in the OS browser instead
   // of a new, less-controlled BrowserWindow.
   mainWindow.webContents.setWindowOpenHandler((details) => {
