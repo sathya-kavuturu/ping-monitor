@@ -109,11 +109,21 @@ function buildOptions(
  * cursor-synced legend, labeled with the target's name and IP so you don't
  * need to cross-reference the sidebar to know which line is which.
  */
+// Zoom floor for "Fit all in view" - past this, charts become illegible, so
+// a huge target count degrades to the page's normal scrolling instead of
+// shrinking further.
+const MIN_FIT_ZOOM_FACTOR = 0.3
+
 function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const plotRef = useRef<uPlot | null>(null)
+  const mainRef = useRef<HTMLElement>(null)
   const [rangeMs, setRangeMs] = useState(DEFAULT_RANGE_MS)
   const [viewMode, setViewMode] = useState<ViewMode>('combined')
+  // Individual view only: zooms the whole page out just enough that every
+  // visible target's chart fits without scrolling - see the effect below
+  // for how the needed factor is computed.
+  const [fitAllInView, setFitAllInView] = useState(false)
 
   // The applied cadence (seconds) and the raw text of the input - kept
   // separate so an in-progress edit (e.g. a cleared field, or "2.") isn't
@@ -200,6 +210,52 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
     () => targets.filter((target) => !excludedTargetIds.has(target.id)),
     [targets, excludedTargetIds]
   )
+
+  const isFitAllActive = fitAllInView && viewMode === 'individual'
+
+  // "Fit all in view": rather than shrinking each chart's own box (which
+  // just makes them individually tiny while the page still scrolls once you
+  // have enough targets), this zooms the whole window out - the same effect
+  // as pressing Ctrl/Cmd+- repeatedly, but computed in one step instead of
+  // needing to guess how many presses it takes.
+  //
+  // The trick is that `.main-content`'s CSS pixel sizes (chart heights, text)
+  // don't change with zoom, but the CSS pixel viewport DOES grow as zoom
+  // decreases (roughly `physicalHeight / zoomFactor`) - so at zoom 1,
+  // `clientHeight` is just the physical viewport height, and dividing it by
+  // `scrollHeight` (the content's true, zoom-invariant height) gives exactly
+  // the factor that makes the new viewport (`clientHeight / factor`) equal
+  // the content height, i.e. zero overflow.
+  useEffect(() => {
+    if (!isFitAllActive) {
+      window.api.setZoomFactor(1)
+      return
+    }
+    const container = mainRef.current
+    if (!container) return
+
+    // Reset to 100% first so the measurement below reflects the content's
+    // real size, not whatever zoom was already applied from a previous fit.
+    window.api.setZoomFactor(1)
+    const raf = requestAnimationFrame(() => {
+      const el = mainRef.current
+      if (!el || el.scrollHeight === 0) return
+      const factor = el.clientHeight / el.scrollHeight
+      window.api.setZoomFactor(Math.min(1, Math.max(MIN_FIT_ZOOM_FACTOR, factor)))
+    })
+    return () => cancelAnimationFrame(raf)
+    // Re-fit whenever the set of visible charts changes - not on every ~1s
+    // data tick (data ticks don't change any element's height).
+  }, [isFitAllActive, visibleTargets.length])
+
+  // However the tab gets left - switching to a different main view,
+  // unmounting - always hand zoom back at 100% rather than leaving the rest
+  // of the app's UI stuck shrunk with no way to explain why.
+  useEffect(() => {
+    return () => {
+      window.api.setZoomFactor(1)
+    }
+  }, [])
 
   // Falls back to the engine's 1s default until the real value loads - see
   // `buildOverviewChartData` for why the chart grid must track this.
@@ -358,7 +414,7 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
   useEffect(fitToRange, [rangeMs, targetsKey, viewMode])
 
   return (
-    <main className="main-content">
+    <main className="main-content" ref={mainRef}>
       <header className="main-header">
         <h1>Overview</h1>
         <div className="ping-interval-setting">
@@ -455,6 +511,14 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
                   }}
                   isZoomed={anyIndividualZoomed}
                 />
+                <button
+                  type="button"
+                  className={`view-mode-btn ${fitAllInView ? 'view-mode-btn--active' : ''}`}
+                  onClick={() => setFitAllInView((value) => !value)}
+                  title="Zoom the window out just enough that every target's graph fits without scrolling"
+                >
+                  {fitAllInView ? 'Exit fit view' : 'Fit all in view'}
+                </button>
               </div>
             </div>
           )}

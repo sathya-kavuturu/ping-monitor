@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import { IpcChannels } from '../shared/ipc-channels'
 import type { ExposedApi, NetworkUpdate, UpdateStatusEvent } from '../shared/types'
 
@@ -61,7 +61,13 @@ const api: ExposedApi = {
     return () => {
       ipcRenderer.removeListener(IpcChannels.UpdateStatus, listener)
     }
-  }
+  },
+
+  // `webFrame` is one of the small set of Electron modules still usable from
+  // a sandboxed preload script (unlike most of `electron`, which needs
+  // Node/full-context access) - no IPC round trip needed for a same-process
+  // renderer-frame API like this one.
+  setZoomFactor: (factor) => webFrame.setZoomFactor(factor)
 }
 
 // contextIsolation is enabled (see main/index.ts), so `window` in the

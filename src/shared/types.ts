@@ -168,4 +168,11 @@ export interface ExposedApi {
   checkForUpdates: () => void
   downloadUpdate: () => void
   onUpdateStatus: (callback: (event: UpdateStatusEvent) => void) => () => void
+  /**
+   * Sets the whole window's page zoom factor (1 = 100%) - used by the
+   * Overview tab's "Fit all in view" to shrink everything just enough that
+   * every individual target's graph fits without scrolling, the same effect
+   * as pressing Ctrl/Cmd+- repeatedly but computed in one step.
+   */
+  setZoomFactor: (factor: number) => void
 }

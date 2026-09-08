@@ -16,6 +16,7 @@ import UpdateDialog from './components/UpdateDialog'
 import AddTargetDialog from './components/AddTargetDialog'
 import EditTargetDialog from './components/EditTargetDialog'
 import ConfirmDialog from './components/ConfirmDialog'
+import HelpDialog from './components/HelpDialog'
 
 export interface TargetWithStatus extends Target {
   status: TargetStatus
@@ -26,6 +27,7 @@ export type MainView = 'target' | 'alerts' | 'overview'
 
 function App(): React.JSX.Element {
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [isHelpOpen, setIsHelpOpen] = useState(false)
   const [mainView, setMainView] = useState<MainView>('target')
   const [targets, setTargets] = useState<TargetWithStatus[]>([])
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null)
@@ -232,6 +234,14 @@ function App(): React.JSX.Element {
           />
         </svg>
       </button>
+      <button
+        type="button"
+        className="help-toggle"
+        onClick={() => setIsHelpOpen(true)}
+        aria-label="Help"
+      >
+        ?
+      </button>
       <Sidebar
         isOpen={sidebarOpen}
         targets={targets}
@@ -260,6 +270,7 @@ function App(): React.JSX.Element {
         <OverviewChart targets={targets} updatesByTarget={updatesByTarget} />
       )}
       <UpdateDialog />
+      {isHelpOpen && <HelpDialog onClose={() => setIsHelpOpen(false)} />}
       {isAddDialogOpen && (
         <AddTargetDialog
           onCreateTarget={handleCreateTarget}

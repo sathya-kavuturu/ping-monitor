@@ -218,6 +218,38 @@ body {
   width: 720px;
 }
 
+.help-content {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.help-content section + section {
+  margin-top: 20px;
+}
+
+.help-content h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  margin: 0 0 8px;
+}
+
+.help-content ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.help-content li {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
 .modal-actions--start {
   justify-content: flex-start;
   margin-bottom: 12px;
@@ -262,6 +294,30 @@ body {
 }
 
 .sidebar-toggle:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.help-toggle {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 60;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.help-toggle:hover {
   color: var(--text);
   border-color: var(--accent);
 }
@@ -406,6 +462,10 @@ body {
   align-items: center;
   gap: 12px;
   margin-bottom: 20px;
+  /* Clears the fixed help ("?") button pinned at the window's top-right -
+     otherwise right-aligned header content (e.g. Overview's view-mode
+     toggle, pushed there by `margin-left: auto`) sits right underneath it. */
+  padding-right: 20px;
 }
 
 .main-header h1 {
