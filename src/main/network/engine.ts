@@ -38,7 +38,10 @@ interface TargetState {
 }
 
 const DEFAULT_PING_INTERVAL_MS = 1_000
-const DEFAULT_TRACE_INTERVAL_MS = 30_000
+// Exported so storage-stats.ts can project HopHistory growth without
+// duplicating (and risking drift from) this constant - main/index.ts never
+// overrides it today, so it's the cadence every target actually runs at.
+export const DEFAULT_TRACE_INTERVAL_MS = 30_000
 const DEFAULT_DEGRADED_THRESHOLD_MS = 150
 
 /**

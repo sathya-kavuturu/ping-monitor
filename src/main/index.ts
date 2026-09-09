@@ -29,6 +29,7 @@ import {
 } from './db/targets'
 import { savePingRollup, getPingHistory, type RawPingSample } from './db/ping-history'
 import { saveHopHistory, getHopHistory } from './db/hop-history'
+import { getDbStorageStats } from './db/storage-stats'
 import {
   createAlertRule,
   listAlertRules,
@@ -295,6 +296,11 @@ function registerIpcHandlers(): void {
   ipcMain.handle(IpcChannels.HopHistoryList, async (event, query: HopHistoryQuery) => {
     assertTrustedSender(event.senderFrame)
     return getHopHistory(query)
+  })
+
+  ipcMain.handle(IpcChannels.DbStorageStats, async (event) => {
+    assertTrustedSender(event.senderFrame)
+    return getDbStorageStats()
   })
 
   ipcMain.handle(IpcChannels.AlertRulesList, async (event, targetId?: string) => {

@@ -108,6 +108,17 @@ function Sidebar({
           </button>
         </li>
         <li>
+          <button
+            type="button"
+            className={`target-item ${mainView === 'db-storage' ? 'is-selected' : ''}`}
+            onClick={() => onSelectView('db-storage')}
+          >
+            <span className="target-info">
+              <span className="target-name">DB Storage</span>
+            </span>
+          </button>
+        </li>
+        <li>
           <button type="button" className="target-item" onClick={onOpenHelp}>
             <span className="target-info">
               <span className="target-name">Help</span>

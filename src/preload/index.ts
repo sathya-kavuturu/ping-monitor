@@ -29,6 +29,8 @@ const api: ExposedApi = {
 
   getHopHistory: (query) => ipcRenderer.invoke(IpcChannels.HopHistoryList, query),
 
+  getDbStorageStats: () => ipcRenderer.invoke(IpcChannels.DbStorageStats),
+
   getAlertRules: (targetId) => ipcRenderer.invoke(IpcChannels.AlertRulesList, targetId),
 
   createAlertRule: (input) => ipcRenderer.invoke(IpcChannels.AlertRulesCreate, input),

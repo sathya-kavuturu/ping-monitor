@@ -13,6 +13,7 @@ export const IpcChannels = {
   ResolveHopHosting: 'network:resolve-hop-hosting',
   PingHistoryList: 'ping-history:list',
   HopHistoryList: 'hop-history:list',
+  DbStorageStats: 'db:storage-stats',
   AlertRulesList: 'alert-rules:list',
   AlertRulesCreate: 'alert-rules:create',
   AlertRulesSetEnabled: 'alert-rules:set-enabled',

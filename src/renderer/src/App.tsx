@@ -16,13 +16,14 @@ import AddTargetDialog from './components/AddTargetDialog'
 import EditTargetDialog from './components/EditTargetDialog'
 import ConfirmDialog from './components/ConfirmDialog'
 import HelpDialog from './components/HelpDialog'
+import DbStorageView from './components/DbStorageView'
 
 export interface TargetWithStatus extends Target {
   status: TargetStatus
 }
 
 /** Which top-level view fills the main content area, picked from the sidebar. */
-export type MainView = 'target' | 'alerts' | 'overview'
+export type MainView = 'target' | 'alerts' | 'overview' | 'db-storage'
 
 function App(): React.JSX.Element {
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -243,6 +244,7 @@ function App(): React.JSX.Element {
       />
       {mainView === 'target' && <MainContent target={selectedTarget} liveUpdates={liveUpdates} />}
       {mainView === 'alerts' && <AllAlerts targets={targets} />}
+      {mainView === 'db-storage' && <DbStorageView />}
       {mainView === 'overview' && (
         <OverviewChart
           targets={targets}

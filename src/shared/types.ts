@@ -91,6 +91,26 @@ export interface HopHistoryQuery {
   limit?: number
 }
 
+/** One DB table's current row count and on-disk byte usage (see `getDbStorageStats`). */
+export interface DbTableStats {
+  table: string
+  rowCount: number
+  bytes: number
+}
+
+/** See `src/main/db/storage-stats.ts` for how each field is derived. */
+export interface DbStorageStats {
+  /** Total on-disk size of the database file(s) right now. */
+  fileBytes: number
+  tables: DbTableStats[]
+  /**
+   * A from-scratch capacity estimate, not "current size plus 30 more days" -
+   * approximately how much ping-history + hop-history alone would occupy if
+   * today's targets and cadence ran for a full 30 days.
+   */
+  estimatedBytesFor30Days: number
+}
+
 /**
  * Hosting/ownership info for one hop's public IP (ISP, organization, ASN) -
  * looked up on demand per address, not stored on `HopSample`/`HopRecord`
@@ -164,6 +184,7 @@ export interface ExposedApi {
   resolveHopHosting: (address: string) => Promise<HopHostingInfo | null>
   getPingHistory: (query: PingHistoryQuery) => Promise<PingHistoryRecord[]>
   getHopHistory: (query: HopHistoryQuery) => Promise<HopRecord[]>
+  getDbStorageStats: () => Promise<DbStorageStats>
   /** Omit `targetId` to list alert rules across every target (used by the consolidated Alerts view). */
   getAlertRules: (targetId?: string) => Promise<AlertRule[]>
   createAlertRule: (input: CreateAlertRuleInput) => Promise<AlertRule>

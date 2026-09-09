@@ -7,7 +7,7 @@ import { runMigrations } from './migrate'
 
 let prisma: PrismaClient | null = null
 
-function getDatabasePath(): string {
+export function getDatabasePath(): string {
   return join(app.getPath('userData'), 'app.db')
 }
 
