@@ -1,22 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { NetworkUpdate, PingHistoryRecord } from '../../../shared/types'
+import type { NetworkUpdate } from '../../../shared/types'
 import type { TargetWithStatus } from '../App'
 import { useHopHosting } from '../lib/use-hop-hosting'
 import TimelineChart from './TimelineChart'
 import PathVisualization from './PathVisualization'
 import RouteTable from './RouteTable'
-import PingHistoryChart from './PingHistoryChart'
-import PingHistoryRangeControls from './PingHistoryRangeControls'
-import Modal from './Modal'
 
 interface MainContentProps {
   target: TargetWithStatus | null
   liveUpdates: NetworkUpdate[]
-  pingHistory: PingHistoryRecord[]
-  historyError: string | null
-  onRefreshHistory: () => void
-  historyRangeMs: number
-  onSelectHistoryRange: (ms: number) => void
 }
 
 function formatMs(value: number | null): string {
@@ -29,17 +21,8 @@ function formatAge(capturedAt: number | null): string {
   return seconds < 60 ? `${seconds}s ago` : `${Math.round(seconds / 60)}m ago`
 }
 
-function MainContent({
-  target,
-  liveUpdates,
-  pingHistory,
-  historyError,
-  onRefreshHistory,
-  historyRangeMs,
-  onSelectHistoryRange
-}: MainContentProps): React.JSX.Element {
+function MainContent({ target, liveUpdates }: MainContentProps): React.JSX.Element {
   const latest = liveUpdates[liveUpdates.length - 1]
-  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false)
 
   // Forward-resolved just for display (e.g. "example.com (93.184.216.34)")
   // - the target keeps monitoring whatever host it was created with.
@@ -63,8 +46,6 @@ function MainContent({
   }, [targetHost])
 
   const showResolvedIp = resolvedIp !== null && target !== null && resolvedIp !== target.host
-
-  useEffect(() => setIsHistoryExpanded(false), [target?.id])
 
   // Shared across `PathVisualization` and `RouteTable` (both derived from
   // the same `liveUpdates`) so a given hop address is only ever looked up
@@ -118,7 +99,7 @@ function MainContent({
             </div>
           </section>
 
-          <TimelineChart key={`timeline-${target.id}`} updates={liveUpdates} />
+          <TimelineChart key={`timeline-${target.id}`} targetId={target.id} updates={liveUpdates} />
 
           <PathVisualization
             key={`path-${target.id}`}
@@ -132,55 +113,6 @@ function MainContent({
             updates={liveUpdates}
             hostingByAddress={hostingByAddress}
           />
-
-          <section className="feed">
-            <div className="feed-header-row">
-              <h2>Ping History</h2>
-              <div className="feed-header-actions">
-                <PingHistoryRangeControls
-                  rangeMs={historyRangeMs}
-                  onSelectRange={onSelectHistoryRange}
-                />
-                <button type="button" className="refresh-btn" onClick={onRefreshHistory}>
-                  Refresh
-                </button>
-                <button
-                  type="button"
-                  className="refresh-btn"
-                  onClick={() => setIsHistoryExpanded(true)}
-                >
-                  Pop out
-                </button>
-              </div>
-            </div>
-            <PingHistoryChart pingHistory={pingHistory} historyError={historyError} />
-          </section>
-
-          {isHistoryExpanded && (
-            <Modal
-              title="Ping History"
-              onClose={() => setIsHistoryExpanded(false)}
-              className="modal-card--wide"
-            >
-              <div className="modal-actions modal-actions--start">
-                <PingHistoryRangeControls
-                  rangeMs={historyRangeMs}
-                  onSelectRange={onSelectHistoryRange}
-                />
-                <button type="button" className="refresh-btn" onClick={onRefreshHistory}>
-                  Refresh
-                </button>
-                <button
-                  type="button"
-                  className="refresh-btn"
-                  onClick={() => setIsHistoryExpanded(false)}
-                >
-                  Merge back into tab
-                </button>
-              </div>
-              <PingHistoryChart pingHistory={pingHistory} historyError={historyError} expanded />
-            </Modal>
-          )}
         </>
       )}
     </main>

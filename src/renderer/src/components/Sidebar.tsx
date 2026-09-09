@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type DragEvent } from 'react'
 import type { MainView, TargetWithStatus } from '../App'
 import ContextMenu from './ContextMenu'
 
@@ -11,6 +11,8 @@ interface SidebarProps {
   onSelectView: (view: MainView) => void
   onOpenAddTarget: () => void
   onOpenHelp: () => void
+  onReorderTargets: (orderedIds: string[]) => void
+  onToggleShowInOverview: (target: TargetWithStatus) => void
   onEditTarget: (target: TargetWithStatus) => void
   onDeleteTarget: (target: TargetWithStatus) => void
   error: string | null
@@ -31,11 +33,53 @@ function Sidebar({
   onSelectView,
   onOpenAddTarget,
   onOpenHelp,
+  onReorderTargets,
+  onToggleShowInOverview,
   onEditTarget,
   onDeleteTarget,
   error
 }: SidebarProps): React.JSX.Element {
   const [menu, setMenu] = useState<TargetMenuState | null>(null)
+  const [draggedId, setDraggedId] = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+
+  const handleDragStart = (event: DragEvent<HTMLLIElement>, id: string): void => {
+    setDraggedId(id)
+    // Some browsers (notably Firefox) refuse to start a drag at all unless
+    // dataTransfer carries something - Chromium/Electron doesn't strictly
+    // need it, but setting it costs nothing and keeps this portable.
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', id)
+  }
+
+  const handleDragOver = (event: DragEvent<HTMLLIElement>, id: string): void => {
+    // Dragover must be prevented for a drop to be allowed to fire at all -
+    // that's just how the HTML5 DnD API works, not specific to this list.
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    if (dragOverId !== id) setDragOverId(id)
+  }
+
+  const handleDrop = (event: DragEvent<HTMLLIElement>, dropId: string): void => {
+    event.preventDefault()
+    setDragOverId(null)
+    if (!draggedId || draggedId === dropId) return
+
+    // Dropping on a row inserts the dragged target right before it -
+    // compute that by removing the dragged id, then splicing it back in at
+    // wherever the drop target now sits in the shortened list.
+    const withoutDragged = targets.filter((target) => target.id !== draggedId)
+    const draggedTarget = targets.find((target) => target.id === draggedId)
+    const dropIndex = withoutDragged.findIndex((target) => target.id === dropId)
+    if (!draggedTarget || dropIndex === -1) return
+
+    const reordered = [
+      ...withoutDragged.slice(0, dropIndex),
+      draggedTarget,
+      ...withoutDragged.slice(dropIndex)
+    ]
+    onReorderTargets(reordered.map((target) => target.id))
+  }
 
   return (
     <aside className={`sidebar ${isOpen ? '' : 'sidebar--closed'}`} aria-hidden={!isOpen}>
@@ -85,12 +129,26 @@ function Sidebar({
         {targets.map((target) => (
           <li
             key={target.id}
-            className="target-row"
+            className={`target-row ${draggedId === target.id ? 'target-row--dragging' : ''} ${
+              dragOverId === target.id && draggedId !== target.id ? 'target-row--drag-over' : ''
+            }`}
+            draggable
+            onDragStart={(event) => handleDragStart(event, target.id)}
+            onDragOver={(event) => handleDragOver(event, target.id)}
+            onDragLeave={() => setDragOverId((current) => (current === target.id ? null : current))}
+            onDrop={(event) => handleDrop(event, target.id)}
+            onDragEnd={() => {
+              setDraggedId(null)
+              setDragOverId(null)
+            }}
             onContextMenu={(event) => {
               event.preventDefault()
               setMenu({ target, x: event.clientX, y: event.clientY })
             }}
           >
+            <span className="target-drag-handle" aria-hidden="true">
+              ⠿
+            </span>
             <button
               type="button"
               className={`target-item ${
@@ -114,6 +172,11 @@ function Sidebar({
           y={menu.y}
           onClose={() => setMenu(null)}
           items={[
+            {
+              label: 'Show in Overview',
+              checked: menu.target.showInOverview,
+              onClick: () => onToggleShowInOverview(menu.target)
+            },
             { label: 'Edit', onClick: () => onEditTarget(menu.target) },
             { label: 'Delete', onClick: () => onDeleteTarget(menu.target), danger: true }
           ]}

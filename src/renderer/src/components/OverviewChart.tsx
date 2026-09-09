@@ -21,6 +21,7 @@ function anomalyMarkerKey(targetId: string, index: number): string {
 interface OverviewChartProps {
   targets: TargetWithStatus[]
   updatesByTarget: Record<string, NetworkUpdate[]>
+  onToggleShowInOverview: (target: TargetWithStatus) => void
 }
 
 type ViewMode = 'combined' | 'individual'
@@ -114,7 +115,11 @@ function buildOptions(
 // shrinking further.
 const MIN_FIT_ZOOM_FACTOR = 0.3
 
-function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.JSX.Element {
+function OverviewChart({
+  targets,
+  updatesByTarget,
+  onToggleShowInOverview
+}: OverviewChartProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const plotRef = useRef<uPlot | null>(null)
   const mainRef = useRef<HTMLElement>(null)
@@ -157,9 +162,6 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
       })
       .finally(() => setIsSavingInterval(false))
   }
-  // Tracks unchecked targets rather than checked ones, so a newly added
-  // target defaults to visible without needing its id added explicitly.
-  const [excludedTargetIds, setExcludedTargetIds] = useState<Set<string>>(new Set())
   const [isCombinedZoomed, setIsCombinedZoomed] = useState(false)
   // Read inside the combined chart's setScale hook, which closes over the
   // plot instance created once on mount - a ref keeps it seeing the latest
@@ -197,19 +199,11 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
     []
   )
 
-  const toggleTarget = (id: string): void => {
-    setExcludedTargetIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const visibleTargets = useMemo(
-    () => targets.filter((target) => !excludedTargetIds.has(target.id)),
-    [targets, excludedTargetIds]
-  )
+  // The set of targets actually rendered in either view (combined chart's
+  // overlaid lines, or individual view's list of charts) - `targets` itself
+  // still holds every target, so the checkbox list below can keep showing
+  // (and re-enabling) ones a user hid via the sidebar's "Show in Overview".
+  const visibleTargets = useMemo(() => targets.filter((target) => target.showInOverview), [targets])
 
   const isFitAllActive = fitAllInView && viewMode === 'individual'
 
@@ -262,8 +256,8 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
   const pingIntervalMs = pingIntervalSec !== null ? pingIntervalSec * 1000 : 1000
 
   const overviewData = useMemo(
-    () => buildOverviewChartData(targets, updatesByTarget, rangeMs, pingIntervalMs),
-    [targets, updatesByTarget, rangeMs, pingIntervalMs]
+    () => buildOverviewChartData(visibleTargets, updatesByTarget, rangeMs, pingIntervalMs),
+    [visibleTargets, updatesByTarget, rangeMs, pingIntervalMs]
   )
   const { xs, series } = overviewData
 
@@ -313,17 +307,23 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
   // explicit cleanup needed when a chart unmounts.
   const anyIndividualZoomed = visibleTargets.some((target) => zoomedTargetIds.has(target.id))
 
-  // Rebuild only when the SET of targets changes (series count/labels/
-  // colors depend on it) - not on every ~1s data tick.
-  const targetsKey = useMemo(() => targets.map((target) => target.id).join(','), [targets])
+  // Rebuild only when the SET of visible targets changes (series count/
+  // labels depend on it) - not on every ~1s data tick.
+  const targetsKey = useMemo(
+    () => visibleTargets.map((target) => target.id).join(','),
+    [visibleTargets]
+  )
 
   useEffect(() => {
     const container = containerRef.current
-    if (!container || targets.length === 0 || viewMode !== 'combined') return
+    if (!container || visibleTargets.length === 0 || viewMode !== 'combined') return
 
-    const labels = targets.map((target) => `${target.name} (${target.host})`)
+    const labels = visibleTargets.map((target) => `${target.name} (${target.host})`)
     const { width, height } = container.getBoundingClientRect()
-    const initialData: uPlot.AlignedData = [[], ...targets.map(() => [])] as uPlot.AlignedData
+    const initialData: uPlot.AlignedData = [
+      [],
+      ...visibleTargets.map(() => [])
+    ] as uPlot.AlignedData
     const plot = new uPlot(
       buildOptions(
         Math.max(width, 1),
@@ -361,7 +361,7 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
       setIsCombinedZoomed(false)
       setCombinedMarkers([])
     }
-    // Deliberately keyed on targetsKey, not `targets` itself - see above.
+    // Deliberately keyed on targetsKey, not `visibleTargets` itself - see above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetsKey, viewMode])
 
@@ -460,8 +460,8 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
             <label key={target.id} className="target-checkbox">
               <input
                 type="checkbox"
-                checked={!excludedTargetIds.has(target.id)}
-                onChange={() => toggleTarget(target.id)}
+                checked={target.showInOverview}
+                onChange={() => onToggleShowInOverview(target)}
               />
               <span>
                 {target.name} ({target.host})
@@ -486,6 +486,11 @@ function OverviewChart({ targets, updatesByTarget }: OverviewChartProps): React.
           </div>
           {targets.length === 0 ? (
             <p className="feed-empty">Add a target to see its latency here.</p>
+          ) : visibleTargets.length === 0 ? (
+            <p className="feed-empty">
+              Check a target in Individual view (or "Show in Overview" from the sidebar) to see it
+              here.
+            </p>
           ) : (
             <div className="chart-wrap">
               <div

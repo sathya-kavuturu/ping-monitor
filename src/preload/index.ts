@@ -16,6 +16,11 @@ const api: ExposedApi = {
 
   deleteTarget: (id) => ipcRenderer.invoke(IpcChannels.TargetsDelete, id),
 
+  reorderTargets: (orderedIds) => ipcRenderer.invoke(IpcChannels.TargetsReorder, orderedIds),
+
+  setTargetShowInOverview: (id, showInOverview) =>
+    ipcRenderer.invoke(IpcChannels.TargetsSetShowInOverview, id, showInOverview),
+
   resolveHostname: (host) => ipcRenderer.invoke(IpcChannels.ResolveHostname, host),
 
   resolveHopHosting: (address) => ipcRenderer.invoke(IpcChannels.ResolveHopHosting, address),

@@ -24,9 +24,9 @@ export const RANGE_PRESETS: RangePreset[] = [
 export const DEFAULT_RANGE_MS = RANGE_PRESETS[0].ms
 
 /**
- * Range picker for the Ping History chart (see `PingHistoryRangeControls`) -
- * separate from `RANGE_PRESETS` because history rollups are durable DB rows
- * (see `getPingHistory`), not the live in-memory buffer `CHART_WINDOW_MS`
+ * The long-range end of `TimelineChart`'s picker - separate from
+ * `RANGE_PRESETS` because history rollups are durable DB rows (see
+ * `getPingHistory`), not the live in-memory buffer `CHART_WINDOW_MS`
  * bounds, so "how far back can I look" is measured in days, not minutes.
  */
 export const HISTORY_RANGE_PRESETS: RangePreset[] = [
@@ -35,7 +35,22 @@ export const HISTORY_RANGE_PRESETS: RangePreset[] = [
   { label: '30d', ms: 30 * 24 * 60 * 60 * 1000 }
 ]
 
-export const DEFAULT_HISTORY_RANGE_MS = HISTORY_RANGE_PRESETS[0].ms
+export interface TimelineRangePreset extends RangePreset {
+  /** Which data source this preset reads from - see `TimelineChart`. */
+  source: 'live' | 'history'
+}
+
+/**
+ * The per-target Latency chart's full range picker (`TimelineChart`) - short
+ * presets read the live in-memory buffer (`CHART_WINDOW_MS`'s worth), long
+ * ones fetch durable 1-minute rollups from the DB instead (`getPingHistory`),
+ * merged into one picker so there's a single latency chart rather than a
+ * separate "ping history" one.
+ */
+export const TIMELINE_RANGE_PRESETS: TimelineRangePreset[] = [
+  ...RANGE_PRESETS.map((preset) => ({ ...preset, source: 'live' as const })),
+  ...HISTORY_RANGE_PRESETS.map((preset) => ({ ...preset, source: 'history' as const }))
+]
 
 // Trailing-sample window used to smooth the packet-loss series - a raw
 // per-sample 0/100 signal is too spiky to read as a trend at a glance.

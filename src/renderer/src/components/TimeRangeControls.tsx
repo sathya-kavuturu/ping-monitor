@@ -1,4 +1,4 @@
-import { RANGE_PRESETS } from '../lib/chart-data'
+import { RANGE_PRESETS, type RangePreset } from '../lib/chart-data'
 
 interface TimeRangeControlsProps {
   rangeMs: number
@@ -6,6 +6,8 @@ interface TimeRangeControlsProps {
   onResetZoom: () => void
   /** Highlights the reset button so a manual drag-zoom is obvious, not just inferable from the axis. */
   isZoomed?: boolean
+  /** Defaults to the short live-only presets; `TimelineChart` passes its own longer, history-inclusive list. */
+  presets?: RangePreset[]
 }
 
 /**
@@ -17,11 +19,12 @@ function TimeRangeControls({
   rangeMs,
   onSelectRange,
   onResetZoom,
-  isZoomed = false
+  isZoomed = false,
+  presets = RANGE_PRESETS
 }: TimeRangeControlsProps): React.JSX.Element {
   return (
     <div className="time-range-controls">
-      {RANGE_PRESETS.map((preset) => (
+      {presets.map((preset) => (
         <button
           key={preset.label}
           type="button"

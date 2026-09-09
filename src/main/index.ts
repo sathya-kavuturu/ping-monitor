@@ -19,7 +19,14 @@ import { createTray, destroyTray } from './tray'
 import { initAutoUpdater, checkForUpdates, downloadUpdate } from './updater'
 import { initDatabase, closeDatabase } from './db/client'
 import { loadSettings, setPingIntervalMs as persistPingIntervalMs } from './settings'
-import { createTarget, deleteTarget, listTargets, updateTarget } from './db/targets'
+import {
+  createTarget,
+  deleteTarget,
+  listTargets,
+  reorderTargets,
+  setTargetShowInOverview,
+  updateTarget
+} from './db/targets'
 import { savePingRollup, getPingHistory, type RawPingSample } from './db/ping-history'
 import { saveHopHistory, getHopHistory } from './db/hop-history'
 import {
@@ -253,6 +260,22 @@ function registerIpcHandlers(): void {
     await refreshCurrentTargets()
     await refreshAlertRules()
   })
+
+  ipcMain.handle(IpcChannels.TargetsReorder, async (event, orderedIds: string[]) => {
+    assertTrustedSender(event.senderFrame)
+    await reorderTargets(orderedIds)
+    // Doesn't change which hosts are monitored, just refreshes the
+    // in-memory target list's order to match.
+    await refreshCurrentTargets()
+  })
+
+  ipcMain.handle(
+    IpcChannels.TargetsSetShowInOverview,
+    async (event, id: string, showInOverview: boolean) => {
+      assertTrustedSender(event.senderFrame)
+      return setTargetShowInOverview(id, showInOverview)
+    }
+  )
 
   ipcMain.handle(IpcChannels.ResolveHostname, async (event, host: string) => {
     assertTrustedSender(event.senderFrame)

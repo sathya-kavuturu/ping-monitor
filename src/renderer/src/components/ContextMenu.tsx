@@ -4,6 +4,8 @@ export interface ContextMenuItem {
   label: string
   onClick: () => void
   danger?: boolean
+  /** Renders a checkmark before the label and marks the item as toggled on. */
+  checked?: boolean
 }
 
 interface ContextMenuProps {
@@ -66,6 +68,11 @@ function ContextMenu({ x, y, items, onClose }: ContextMenuProps): React.JSX.Elem
             onClose()
           }}
         >
+          {item.checked !== undefined && (
+            <span className="context-menu-check" aria-hidden="true">
+              {item.checked ? '✓' : ''}
+            </span>
+          )}
           {item.label}
         </button>
       ))}

@@ -9,6 +9,10 @@ export interface Target {
   id: string
   name: string
   host: string
+  /** User-controlled display order (sidebar list, Overview charts). */
+  sortOrder: number
+  /** Whether this target appears in the Overview tab's charts. */
+  showInOverview: boolean
   createdAt: Date
 }
 
@@ -150,6 +154,10 @@ export interface ExposedApi {
   updateTarget: (input: UpdateTargetInput) => Promise<Target>
   /** Cascade-deletes the target's ping history, hop history, and alert rules too. */
   deleteTarget: (id: string) => Promise<void>
+  /** Persists a full reordering - `orderedIds` is every target id in its new display order. */
+  reorderTargets: (orderedIds: string[]) => Promise<void>
+  /** Toggled from the sidebar's right-click menu or the Overview tab's own checkboxes. */
+  setTargetShowInOverview: (id: string, showInOverview: boolean) => Promise<Target>
   /** Resolves a DNS name (or IP literal, returned unchanged) to an IP address, or `null` if it can't be resolved. */
   resolveHostname: (host: string) => Promise<string | null>
   /** Looks up hosting/ISP info for a route hop's public IP - see `HopHostingInfo`. */

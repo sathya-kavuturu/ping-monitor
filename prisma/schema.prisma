@@ -11,6 +11,13 @@ model Target {
   id        String   @id @default(cuid())
   name      String
   host      String
+  /// User-controlled display order (sidebar list, Overview charts) -
+  /// independent of `createdAt` so targets can be reordered after creation.
+  sortOrder Int      @default(0)
+  /// Whether this target appears in the Overview tab's combined/individual
+  /// charts - toggled from either the sidebar's right-click menu or the
+  /// Overview tab's own per-target checkboxes (same underlying flag).
+  showInOverview Boolean @default(true)
   createdAt DateTime @default(now())
 
   pingHistory PingHistory[]

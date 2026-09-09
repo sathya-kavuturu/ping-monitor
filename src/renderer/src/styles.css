@@ -192,6 +192,9 @@ body {
 }
 
 .context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   background: transparent;
   border: none;
   border-radius: 6px;
@@ -200,6 +203,13 @@ body {
   text-align: left;
   padding: 8px 10px;
   cursor: pointer;
+}
+
+.context-menu-check {
+  display: inline-block;
+  width: 12px;
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .context-menu-item:hover {
@@ -381,12 +391,33 @@ body {
   display: flex;
   align-items: center;
   gap: 2px;
+  border-top: 2px solid transparent;
+  border-bottom: 2px solid transparent;
 }
 
 .target-row .target-item {
   width: auto;
   flex: 1;
   min-width: 0;
+}
+
+.target-drag-handle {
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: grab;
+}
+
+.target-row--dragging {
+  opacity: 0.4;
+}
+
+/* Dropping on a row inserts the dragged target right before it (see
+   `Sidebar`'s handleDrop) - a top border reads as "it'll land here". */
+.target-row--drag-over {
+  border-top-color: var(--accent);
 }
 
 .target-info {

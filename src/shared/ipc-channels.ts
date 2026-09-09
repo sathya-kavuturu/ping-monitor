@@ -7,6 +7,8 @@ export const IpcChannels = {
   TargetsCreate: 'targets:create',
   TargetsUpdate: 'targets:update',
   TargetsDelete: 'targets:delete',
+  TargetsReorder: 'targets:reorder',
+  TargetsSetShowInOverview: 'targets:set-show-in-overview',
   ResolveHostname: 'targets:resolve-hostname',
   ResolveHopHosting: 'network:resolve-hop-hosting',
   PingHistoryList: 'ping-history:list',

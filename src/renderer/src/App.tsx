@@ -2,12 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import type {
   CreateTargetInput,
   NetworkUpdate,
-  PingHistoryRecord,
   Target,
   TargetStatus,
   UpdateTargetInput
 } from '../../shared/types'
-import { CHART_WINDOW_MS, DEFAULT_HISTORY_RANGE_MS } from './lib/chart-data'
+import { CHART_WINDOW_MS } from './lib/chart-data'
 import Sidebar from './components/Sidebar'
 import MainContent from './components/MainContent'
 import AllAlerts from './components/AllAlerts'
@@ -44,10 +43,6 @@ function App(): React.JSX.Element {
   const [pendingDeleteTarget, setPendingDeleteTarget] = useState<TargetWithStatus | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
-
-  const [pingHistory, setPingHistory] = useState<PingHistoryRecord[]>([])
-  const [historyError, setHistoryError] = useState<string | null>(null)
-  const [historyRangeMs, setHistoryRangeMs] = useState(DEFAULT_HISTORY_RANGE_MS)
 
   useEffect(() => {
     let cancelled = false
@@ -87,30 +82,6 @@ function App(): React.JSX.Element {
     })
 
     return unsubscribe
-  }, [])
-
-  const loadPingHistory = useCallback((targetId: string, rangeMs: number) => {
-    setHistoryError(null)
-    const to = new Date()
-    const from = new Date(to.getTime() - rangeMs)
-    window.api
-      .getPingHistory({ targetId, from, to })
-      .then(setPingHistory)
-      .catch((error: unknown) => {
-        setHistoryError(error instanceof Error ? error.message : 'Failed to load ping history')
-      })
-  }, [])
-
-  useEffect(() => {
-    if (!selectedTargetId) {
-      setPingHistory([])
-      return
-    }
-    loadPingHistory(selectedTargetId, historyRangeMs)
-  }, [selectedTargetId, historyRangeMs, loadPingHistory])
-
-  const handleSelectHistoryRange = useCallback((rangeMs: number) => {
-    setHistoryRangeMs(rangeMs)
   }, [])
 
   const handleSelectTarget = useCallback((id: string) => {
@@ -209,9 +180,30 @@ function App(): React.JSX.Element {
     }
   }, [pendingDeleteTarget, targets])
 
-  const handleRefreshHistory = useCallback(() => {
-    if (selectedTargetId) loadPingHistory(selectedTargetId, historyRangeMs)
-  }, [selectedTargetId, historyRangeMs, loadPingHistory])
+  // Applied optimistically to local state immediately (snappy drag-free
+  // reordering via the sidebar's up/down buttons), then persisted - a
+  // failure just logs to the sidebar's error slot rather than rolling the
+  // local order back, since the next real fetch (e.g. app restart) will
+  // reconcile it with whatever actually got saved.
+  const handleReorderTargets = useCallback((orderedIds: string[]) => {
+    setTargets((prev) => {
+      const byId = new Map(prev.map((target) => [target.id, target]))
+      return orderedIds
+        .map((id) => byId.get(id))
+        .filter((target): target is TargetWithStatus => target !== undefined)
+    })
+    window.api.reorderTargets(orderedIds).catch((error: unknown) => {
+      setLoadError(error instanceof Error ? error.message : 'Failed to reorder targets')
+    })
+  }, [])
+
+  const handleToggleShowInOverview = useCallback((target: TargetWithStatus) => {
+    const showInOverview = !target.showInOverview
+    setTargets((prev) => prev.map((t) => (t.id === target.id ? { ...t, showInOverview } : t)))
+    window.api.setTargetShowInOverview(target.id, showInOverview).catch((error: unknown) => {
+      setLoadError(error instanceof Error ? error.message : 'Failed to update target')
+    })
+  }, [])
 
   const selectedTarget = targets.find((target) => target.id === selectedTargetId) ?? null
   const liveUpdates = selectedTargetId ? (updatesByTarget[selectedTargetId] ?? []) : []
@@ -243,24 +235,20 @@ function App(): React.JSX.Element {
         onSelectView={handleSelectView}
         onOpenAddTarget={handleOpenAddTarget}
         onOpenHelp={() => setIsHelpOpen(true)}
+        onReorderTargets={handleReorderTargets}
+        onToggleShowInOverview={handleToggleShowInOverview}
         onEditTarget={handleOpenEditTarget}
         onDeleteTarget={handleRequestDeleteTarget}
         error={loadError}
       />
-      {mainView === 'target' && (
-        <MainContent
-          target={selectedTarget}
-          liveUpdates={liveUpdates}
-          pingHistory={pingHistory}
-          historyError={historyError}
-          onRefreshHistory={handleRefreshHistory}
-          historyRangeMs={historyRangeMs}
-          onSelectHistoryRange={handleSelectHistoryRange}
-        />
-      )}
+      {mainView === 'target' && <MainContent target={selectedTarget} liveUpdates={liveUpdates} />}
       {mainView === 'alerts' && <AllAlerts targets={targets} />}
       {mainView === 'overview' && (
-        <OverviewChart targets={targets} updatesByTarget={updatesByTarget} />
+        <OverviewChart
+          targets={targets}
+          updatesByTarget={updatesByTarget}
+          onToggleShowInOverview={handleToggleShowInOverview}
+        />
       )}
       <UpdateDialog />
       {isHelpOpen && <HelpDialog onClose={() => setIsHelpOpen(false)} />}
