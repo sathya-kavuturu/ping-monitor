@@ -4,6 +4,7 @@ import 'uplot/dist/uPlot.min.css'
 import type { NetworkUpdate, PingHistoryRecord } from '../../../shared/types'
 import { buildChartSeries, TIMELINE_RANGE_PRESETS } from '../lib/chart-data'
 import { buildPingHistorySeries } from '../lib/ping-history-chart'
+import { drawLossMarkers } from '../lib/chart-loss-markers'
 import TimeRangeControls from './TimeRangeControls'
 
 interface TimelineChartProps {
@@ -12,7 +13,6 @@ interface TimelineChartProps {
 }
 
 const COLOR_LATENCY = '#4f8cff'
-const COLOR_LOSS = '#e6543e'
 const COLOR_AXIS = '#8b91a2'
 const COLOR_GRID = 'rgba(255, 255, 255, 0.08)'
 
@@ -99,9 +99,10 @@ function buildOptions(
  *
  * There's no packet-loss line/scale anymore - instead, every lost ping (a
  * `null` latency sample, or a rollup bucket with `lostCount > 0`) draws as a
- * thin red vertical bar across the full chart height (see `drawLostMarkers`),
- * a much harder-to-miss signal than a smoothed percentage line, especially
- * for an isolated single lost ping.
+ * thin red vertical bar across the full chart height (see
+ * `drawLossMarkers`, shared with the Overview tab's charts), a much
+ * harder-to-miss signal than a smoothed percentage line, especially for an
+ * isolated single lost ping.
  */
 function TimelineChart({ targetId, updates }: TimelineChartProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -130,20 +131,6 @@ function TimelineChart({ targetId, updates }: TimelineChartProps): React.JSX.Ele
   // ping timestamps without recreating the plot on every data tick.
   const lostSecondsRef = useRef<number[]>([])
 
-  const drawLostMarkers = (u: uPlot): void => {
-    const { left, top, width, height } = u.bbox
-    if (width <= 0 || height <= 0) return
-    const ctx = u.ctx
-    ctx.save()
-    ctx.fillStyle = COLOR_LOSS
-    for (const seconds of lostSecondsRef.current) {
-      const x = u.valToPos(seconds, 'x', true)
-      if (x < left || x > left + width) continue
-      ctx.fillRect(Math.round(x) - 1, top, 2, height)
-    }
-    ctx.restore()
-  }
-
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -161,7 +148,7 @@ function TimelineChart({ targetId, updates }: TimelineChartProps): React.JSX.Ele
           const fullSpanSec = rangeMsRef.current / 1000
           setIsZoomed(max - min < fullSpanSec - 1)
         },
-        drawLostMarkers
+        (u) => drawLossMarkers(u, lostSecondsRef.current)
       ),
       [[], []],
       container

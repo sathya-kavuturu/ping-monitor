@@ -17,9 +17,9 @@ function HelpDialog({ onClose }: HelpDialogProps): React.JSX.Element {
           <h3>Sidebar</h3>
           <ul>
             <li>
-              <strong>Overview</strong>, <strong>Alerts</strong> and <strong>DB Storage</strong> are
-              always-available views; everything else in the list is a monitored target - click one
-              to see its detail page.
+              <strong>Overview</strong>, <strong>Alerts</strong> and <strong>DB Analytics</strong>{' '}
+              are always-available views; everything else in the list is a monitored target - click
+              one to see its detail page.
             </li>
             <li>
               <strong>+ Add Target</strong> opens a dialog for a name and a host (an IP address or a
@@ -83,7 +83,7 @@ function HelpDialog({ onClose }: HelpDialogProps): React.JSX.Element {
         </section>
 
         <section>
-          <h3>DB Storage tab</h3>
+          <h3>DB Analytics tab</h3>
           <ul>
             <li>
               Shows the SQLite database's actual on-disk size, broken down by table, plus a rough

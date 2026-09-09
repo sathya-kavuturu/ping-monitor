@@ -1,4 +1,4 @@
-import { RANGE_PRESETS, type RangePreset } from '../lib/chart-data'
+import type { RangePreset } from '../lib/chart-data'
 
 interface TimeRangeControlsProps {
   rangeMs: number
@@ -6,13 +6,12 @@ interface TimeRangeControlsProps {
   onResetZoom: () => void
   /** Highlights the reset button so a manual drag-zoom is obvious, not just inferable from the axis. */
   isZoomed?: boolean
-  /** Defaults to the short live-only presets; `TimelineChart` passes its own longer, history-inclusive list. */
-  presets?: RangePreset[]
+  presets: RangePreset[]
 }
 
 /**
- * Top-right controls shared by the latency/loss charts: pick how far back
- * to look (also re-fits the chart to that range), or snap back out of a
+ * Top-right controls shared by every latency chart: pick how far back to
+ * look (also re-fits the chart to that range), or snap back out of a
  * manual drag-zoom without changing the selected range.
  */
 function TimeRangeControls({
@@ -20,7 +19,7 @@ function TimeRangeControls({
   onSelectRange,
   onResetZoom,
   isZoomed = false,
-  presets = RANGE_PRESETS
+  presets
 }: TimeRangeControlsProps): React.JSX.Element {
   return (
     <div className="time-range-controls">

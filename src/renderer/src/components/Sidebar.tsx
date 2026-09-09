@@ -114,7 +114,7 @@ function Sidebar({
             onClick={() => onSelectView('db-storage')}
           >
             <span className="target-info">
-              <span className="target-name">DB Storage</span>
+              <span className="target-name">DB Analytics</span>
             </span>
           </button>
         </li>

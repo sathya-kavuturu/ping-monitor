@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
-import type { NetworkUpdate } from '../../../shared/types'
+import type { NetworkUpdate, PingHistoryRecord } from '../../../shared/types'
 import type { TargetWithStatus } from '../App'
 import { buildOverviewChartData } from '../lib/overview-chart'
-import { DEFAULT_RANGE_MS } from '../lib/chart-data'
+import { buildOverviewHistoryData } from '../lib/overview-history-chart'
+import { TIMELINE_RANGE_PRESETS } from '../lib/chart-data'
+import { drawLossMarkers } from '../lib/chart-loss-markers'
 import { detectPacketLossAnomalies, type PacketLossAnomaly } from '../lib/packet-loss-anomaly'
 import { plotOffsetCss } from '../lib/uplot-position'
 import TimeRangeControls from './TimeRangeControls'
 import IndividualLatencyChart, { type SyncedZoomRange } from './IndividualLatencyChart'
 import ChartAnomalyOverlay, { type AnomalyMarker } from './ChartAnomalyOverlay'
+
+// While a history-backed range (24h/7d/30d) is selected, re-fetch on this
+// cadence so the chart still advances roughly in step with the engine's own
+// 1-minute rollup flush, without needing a manual refresh button - mirrors
+// `TimelineChart`'s identical constant.
+const HISTORY_REFRESH_MS = 60_000
 
 /** How far below the plot's top edge the anomaly-marker rail sits, in CSS px. */
 const ANOMALY_RAIL_OFFSET = 10
@@ -123,12 +131,25 @@ function OverviewChart({
   const containerRef = useRef<HTMLDivElement>(null)
   const plotRef = useRef<uPlot | null>(null)
   const mainRef = useRef<HTMLElement>(null)
-  const [rangeMs, setRangeMs] = useState(DEFAULT_RANGE_MS)
+  const [rangeMs, setRangeMs] = useState(TIMELINE_RANGE_PRESETS[0].ms)
   const [viewMode, setViewMode] = useState<ViewMode>('combined')
   // Individual view only: zooms the whole page out just enough that every
   // visible target's chart fits without scrolling - see the effect below
   // for how the needed factor is computed.
   const [fitAllInView, setFitAllInView] = useState(false)
+
+  // The combined chart's own history fetch (individual charts each fetch
+  // their own target's history independently - see `IndividualLatencyChart`).
+  const [historyByTargetId, setHistoryByTargetId] = useState<Record<string, PingHistoryRecord[]>>(
+    {}
+  )
+  const [historyError, setHistoryError] = useState<string | null>(null)
+
+  const selectedPreset = useMemo(
+    () =>
+      TIMELINE_RANGE_PRESETS.find((preset) => preset.ms === rangeMs) ?? TIMELINE_RANGE_PRESETS[0],
+    [rangeMs]
+  )
 
   // The applied cadence (seconds) and the raw text of the input - kept
   // separate so an in-progress edit (e.g. a cleared field, or "2.") isn't
@@ -283,6 +304,11 @@ function OverviewChart({
 
   const [combinedMarkers, setCombinedMarkers] = useState<AnomalyMarker[]>([])
 
+  // Read inside the combined chart's `draw` hook, which closes over the plot
+  // instance created once on mount - a ref keeps it seeing the latest set of
+  // lost-ping timestamps without recreating the plot on every data tick.
+  const lostSecondsRef = useRef<number[]>([])
+
   const recomputeCombinedMarkers = (u: uPlot): void => {
     const { min: xMin, max: xMax } = u.scales.x
     const { left, top } = plotOffsetCss(u)
@@ -314,6 +340,47 @@ function OverviewChart({
     [visibleTargets]
   )
 
+  // History-backed presets (24h/7d/30d) fetch every visible target's
+  // rollups from the DB for the combined chart - re-fetches on a plain
+  // timer while active, since there's no live push channel for rollups the
+  // way there is for samples. Individual view doesn't need this: each
+  // `IndividualLatencyChart` fetches its own target's history independently.
+  useEffect(() => {
+    if (selectedPreset.source !== 'history' || viewMode !== 'combined') return
+
+    let cancelled = false
+    const load = (): void => {
+      setHistoryError(null)
+      const to = new Date()
+      const from = new Date(to.getTime() - selectedPreset.ms)
+      Promise.all(
+        visibleTargets.map((target) =>
+          window.api
+            .getPingHistory({ targetId: target.id, from, to })
+            .then((records) => [target.id, records] as const)
+        )
+      )
+        .then((entries) => {
+          if (!cancelled) setHistoryByTargetId(Object.fromEntries(entries))
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) {
+            setHistoryError(error instanceof Error ? error.message : 'Failed to load ping history')
+          }
+        })
+    }
+
+    load()
+    const interval = setInterval(load, HISTORY_REFRESH_MS)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+    // Deliberately keyed on targetsKey, not `visibleTargets` itself - see
+    // the plot-creation effect below for why.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPreset, viewMode, targetsKey])
+
   useEffect(() => {
     const container = containerRef.current
     if (!container || visibleTargets.length === 0 || viewMode !== 'combined') return
@@ -333,7 +400,10 @@ function OverviewChart({
           const fullSpanSec = rangeMsRef.current / 1000
           setIsCombinedZoomed(max - min < fullSpanSec - 1)
         },
-        (u) => recomputeCombinedMarkers(u)
+        (u) => {
+          recomputeCombinedMarkers(u)
+          drawLossMarkers(u, lostSecondsRef.current)
+        }
       ),
       initialData,
       container
@@ -380,16 +450,31 @@ function OverviewChart({
     plot.setScale('x', { min: Math.floor((now - rangeMs) / 1000), max: Math.floor(now / 1000) })
   }
 
+  const historyData = useMemo(
+    () =>
+      selectedPreset.source === 'history'
+        ? buildOverviewHistoryData(visibleTargets, historyByTargetId)
+        : null,
+    [selectedPreset, visibleTargets, historyByTargetId]
+  )
+
   useEffect(() => {
     if (viewMode !== 'combined') return
     const plot = plotRef.current
     if (!plot) return
+
+    const chartXs = historyData ? historyData.xs : xs
+    const chartSeriesLatency = historyData ? historyData.series : series.map((s) => s.latency)
+    lostSecondsRef.current = historyData
+      ? historyData.lostSeconds
+      : chartXs.filter((_, index) => chartSeriesLatency.some((latency) => latency[index] === null))
+
     // setData's own resetScales:false path skips uPlot's internal commit()
     // entirely - so without an explicit redraw()/setScale() below, the
     // canvas simply never repaints on a plain data tick, and the picture
     // only updates in one big jump whenever some unrelated layout reflow
     // happens to fire the ResizeObserver above.
-    plot.setData([xs, ...series.map((s) => s.latency)], false)
+    plot.setData([chartXs, ...chartSeriesLatency], false)
     if (isCombinedZoomedRef.current) {
       // A manual drag-zoom is active - redraw() (rebuildPaths defaults true)
       // reapplies the plot's CURRENT x-scale bounds, preserving that zoom
@@ -398,7 +483,7 @@ function OverviewChart({
       // marker positions).
       plot.redraw()
     } else {
-      // Unzoomed: `buildOverviewChartData`'s bucket window is a rolling
+      // Unzoomed: the live-mode bucket window above is a rolling
       // [now - rangeMs, now] range that slides forward every tick, but a
       // plain redraw() would keep showing the OLD bounds from the last
       // fitToRange() call - as the two windows drift apart, buckets that
@@ -407,7 +492,7 @@ function OverviewChart({
       // view following the current time, the way a live chart should.
       fitToRange()
     }
-  }, [xs, series, viewMode])
+  }, [xs, series, historyData, viewMode])
 
   // Re-fit whenever the selected preset (or the target set, which rebuilds
   // the plot instance above) changes - not on every data tick.
@@ -481,9 +566,13 @@ function OverviewChart({
                 onSelectRange={setRangeMs}
                 onResetZoom={fitToRange}
                 isZoomed={isCombinedZoomed}
+                presets={TIMELINE_RANGE_PRESETS}
               />
             )}
           </div>
+          {selectedPreset.source === 'history' && historyError && (
+            <p className="sidebar-error">{historyError}</p>
+          )}
           {targets.length === 0 ? (
             <p className="feed-empty">Add a target to see its latency here.</p>
           ) : visibleTargets.length === 0 ? (
@@ -515,6 +604,7 @@ function OverviewChart({
                     setSyncedRange(null)
                   }}
                   isZoomed={anyIndividualZoomed}
+                  presets={TIMELINE_RANGE_PRESETS}
                 />
                 <button
                   type="button"

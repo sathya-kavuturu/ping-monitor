@@ -21,12 +21,10 @@ export const RANGE_PRESETS: RangePreset[] = [
   { label: '2h', ms: 2 * 60 * 60 * 1000 }
 ]
 
-export const DEFAULT_RANGE_MS = RANGE_PRESETS[0].ms
-
 /**
- * The long-range end of `TimelineChart`'s picker - separate from
- * `RANGE_PRESETS` because history rollups are durable DB rows (see
- * `getPingHistory`), not the live in-memory buffer `CHART_WINDOW_MS`
+ * The long-range end of the merged range picker (`TIMELINE_RANGE_PRESETS`) -
+ * separate from `RANGE_PRESETS` because history rollups are durable DB rows
+ * (see `getPingHistory`), not the live in-memory buffer `CHART_WINDOW_MS`
  * bounds, so "how far back can I look" is measured in days, not minutes.
  */
 export const HISTORY_RANGE_PRESETS: RangePreset[] = [
@@ -36,16 +34,17 @@ export const HISTORY_RANGE_PRESETS: RangePreset[] = [
 ]
 
 export interface TimelineRangePreset extends RangePreset {
-  /** Which data source this preset reads from - see `TimelineChart`. */
+  /** Which data source this preset reads from. */
   source: 'live' | 'history'
 }
 
 /**
- * The per-target Latency chart's full range picker (`TimelineChart`) - short
- * presets read the live in-memory buffer (`CHART_WINDOW_MS`'s worth), long
- * ones fetch durable 1-minute rollups from the DB instead (`getPingHistory`),
- * merged into one picker so there's a single latency chart rather than a
- * separate "ping history" one.
+ * The full range picker shared by every latency chart - `TimelineChart` (a
+ * target's own detail page) and both of `OverviewChart`'s views (combined
+ * and individual). Short presets read the live in-memory buffer
+ * (`CHART_WINDOW_MS`'s worth), long ones fetch durable 1-minute rollups
+ * from the DB instead (`getPingHistory`), merged into one picker so there's
+ * one chart rather than a separate "ping history" one for each.
  */
 export const TIMELINE_RANGE_PRESETS: TimelineRangePreset[] = [
   ...RANGE_PRESETS.map((preset) => ({ ...preset, source: 'live' as const })),

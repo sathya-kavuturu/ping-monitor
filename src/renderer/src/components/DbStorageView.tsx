@@ -16,7 +16,7 @@ function formatBytes(bytes: number): string {
 }
 
 /**
- * "DB Storage" sidebar view - a snapshot of how much disk space the app's
+ * "DB Analytics" sidebar view - a snapshot of how much disk space the app's
  * SQLite database is actually using, per table, plus a rough capacity
  * projection for 30 days of history at the current target count/cadence.
  * Purely a point-in-time read (see `getDbStorageStats`) - refreshed on
@@ -49,7 +49,7 @@ function DbStorageView(): React.JSX.Element {
   return (
     <main className="main-content">
       <header className="main-header">
-        <h1>DB Storage</h1>
+        <h1>DB Analytics</h1>
         <button
           type="button"
           className="refresh-btn"

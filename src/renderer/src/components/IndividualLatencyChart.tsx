@@ -1,10 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import uPlot from 'uplot'
-import type { NetworkUpdate } from '../../../shared/types'
+import type { NetworkUpdate, PingHistoryRecord } from '../../../shared/types'
 import { buildOverviewChartData } from '../lib/overview-chart'
+import { buildPingHistorySeries } from '../lib/ping-history-chart'
+import { TIMELINE_RANGE_PRESETS } from '../lib/chart-data'
+import { drawLossMarkers } from '../lib/chart-loss-markers'
 import type { PacketLossAnomaly } from '../lib/packet-loss-anomaly'
 import { plotOffsetCss } from '../lib/uplot-position'
 import ChartAnomalyOverlay, { type AnomalyMarker } from './ChartAnomalyOverlay'
+
+// While a history-backed range (24h/7d/30d) is selected, re-fetch on this
+// cadence so the chart still advances roughly in step with the engine's own
+// 1-minute rollup flush, without needing a manual refresh button - mirrors
+// `TimelineChart`'s identical constant.
+const HISTORY_REFRESH_MS = 60_000
 
 /** How far below the plot's top edge the anomaly-marker rail sits, in CSS px. */
 const ANOMALY_RAIL_OFFSET = 10
@@ -111,6 +120,19 @@ function IndividualLatencyChart({
   const containerRef = useRef<HTMLDivElement>(null)
   const plotRef = useRef<uPlot | null>(null)
   const [isZoomed, setIsZoomed] = useState(false)
+  const [historyRecords, setHistoryRecords] = useState<PingHistoryRecord[]>([])
+  const [historyError, setHistoryError] = useState<string | null>(null)
+
+  // `rangeMs` comes from OverviewChart's one shared range picker, applied
+  // identically to every individual chart - so this chart's own source
+  // (live buffer vs DB history) tracks the SAME preset every other chart in
+  // the list is using, just fetched independently per target.
+  const selectedPreset = useMemo(
+    () =>
+      TIMELINE_RANGE_PRESETS.find((preset) => preset.ms === rangeMs) ?? TIMELINE_RANGE_PRESETS[0],
+    [rangeMs]
+  )
+
   // Read inside the setScale hook below, which closes over the plot instance
   // created once on mount - a ref keeps it seeing the latest selected range
   // without recreating the plot every time it changes.
@@ -142,6 +164,11 @@ function IndividualLatencyChart({
   }, [anomalies])
 
   const [markers, setMarkers] = useState<AnomalyMarker[]>([])
+
+  // Read inside the draw hook below, which closes over the plot instance
+  // created once on mount - a ref keeps it seeing the latest set of lost-
+  // ping timestamps without recreating the plot on every data tick.
+  const lostSecondsRef = useRef<number[]>([])
 
   const recomputeMarkers = (u: uPlot): void => {
     const { min: xMin, max: xMax } = u.scales.x
@@ -181,7 +208,10 @@ function IndividualLatencyChart({
             onZoomChangeRef.current(targetId, zoomed, min, max)
           }
         },
-        (u) => recomputeMarkers(u)
+        (u) => {
+          recomputeMarkers(u)
+          drawLossMarkers(u, lostSecondsRef.current)
+        }
       ),
       [[], []],
       container
@@ -227,21 +257,68 @@ function IndividualLatencyChart({
     plot.setScale('x', { min: Math.floor((now - rangeMs) / 1000), max: Math.floor(now / 1000) })
   }
 
+  // History-backed presets (24h/7d/30d) fetch this target's rollups from the
+  // DB instead of reading `updates` - re-fetches on a plain timer while
+  // active, since there's no live push channel for rollups the way there is
+  // for samples (mirrors `TimelineChart`'s identical effect).
+  useEffect(() => {
+    if (selectedPreset.source !== 'history') return
+
+    let cancelled = false
+    const load = (): void => {
+      setHistoryError(null)
+      const to = new Date()
+      const from = new Date(to.getTime() - selectedPreset.ms)
+      window.api
+        .getPingHistory({ targetId, from, to })
+        .then((records) => {
+          if (!cancelled) setHistoryRecords(records)
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) {
+            setHistoryError(error instanceof Error ? error.message : 'Failed to load ping history')
+          }
+        })
+    }
+
+    load()
+    const interval = setInterval(load, HISTORY_REFRESH_MS)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [targetId, selectedPreset])
+
   useEffect(() => {
     const plot = plotRef.current
     if (!plot) return
-    const { xs, series } = buildOverviewChartData(
-      [{ id: targetId, name: targetName, host: targetHost }],
-      { [targetId]: updates },
-      rangeMs,
-      pingIntervalMs
-    )
+
+    let xs: number[]
+    let latency: (number | null)[]
+
+    if (selectedPreset.source === 'history') {
+      const series = buildPingHistorySeries(historyRecords)
+      xs = series.xs
+      latency = series.avgLatency
+      lostSecondsRef.current = series.lostBucketSeconds
+    } else {
+      const built = buildOverviewChartData(
+        [{ id: targetId, name: targetName, host: targetHost }],
+        { [targetId]: updates },
+        rangeMs,
+        pingIntervalMs
+      )
+      xs = built.xs
+      latency = built.series[0]?.latency ?? []
+      lostSecondsRef.current = xs.filter((_, index) => latency[index] === null)
+    }
+
     // setData's own resetScales:false path skips uPlot's internal commit()
     // entirely - so without an explicit redraw()/setScale() below, the
     // canvas simply never repaints on a plain data tick, and the picture
     // only updates in one big jump whenever some unrelated layout reflow
     // happens to fire the ResizeObserver above.
-    plot.setData([xs, series[0]?.latency ?? []], false)
+    plot.setData([xs, latency], false)
     if (isZoomedRef.current) {
       // A manual drag-zoom is active - redraw() (rebuildPaths defaults true)
       // reapplies the plot's CURRENT x-scale bounds, preserving that zoom
@@ -249,7 +326,7 @@ function IndividualLatencyChart({
       // the repaint.
       plot.redraw()
     } else {
-      // Unzoomed: `buildOverviewChartData`'s bucket window is a rolling
+      // Unzoomed: the live-mode bucket window above is a rolling
       // [now - rangeMs, now] range that slides forward every tick, but a
       // plain redraw() would keep showing the OLD bounds from the last
       // fitToRange() call - as the two windows drift apart, buckets that
@@ -258,7 +335,16 @@ function IndividualLatencyChart({
       // view following the current time, the way a live chart should.
       fitToRange()
     }
-  }, [targetId, targetName, targetHost, updates, rangeMs, pingIntervalMs])
+  }, [
+    selectedPreset,
+    targetId,
+    targetName,
+    targetHost,
+    updates,
+    historyRecords,
+    rangeMs,
+    pingIntervalMs
+  ])
 
   // Re-fit on a new range preset, or when the parent's shared "Reset zoom"
   // button bumps resetSignal - not on every data tick.
@@ -277,6 +363,9 @@ function IndividualLatencyChart({
 
   return (
     <div className="chart-wrap">
+      {selectedPreset.source === 'history' && historyError && (
+        <p className="sidebar-error">{historyError}</p>
+      )}
       <div
         ref={containerRef}
         className={`timeline-chart overview-chart overview-chart--individual ${isZoomed ? 'timeline-chart--zoomed' : ''}`}
