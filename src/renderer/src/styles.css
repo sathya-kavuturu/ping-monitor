@@ -669,6 +669,15 @@ body {
   margin-top: 16px;
 }
 
+.storage-transfer-message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text);
+  margin-top: 10px;
+}
+
 /* Sits right under the "Monitored Targets" heading, above the list itself,
    so it's reachable without scrolling past however many targets exist. */
 .add-target-btn {

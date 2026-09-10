@@ -31,6 +31,19 @@ const api: ExposedApi = {
 
   getDbStorageStats: () => ipcRenderer.invoke(IpcChannels.DbStorageStats),
 
+  exportDatabase: () => ipcRenderer.invoke(IpcChannels.DbExport),
+
+  importDatabase: () => ipcRenderer.invoke(IpcChannels.DbImport),
+
+  getImportedDbInfo: () => ipcRenderer.invoke(IpcChannels.DbImportedInfo),
+
+  clearImportedDatabase: () => ipcRenderer.invoke(IpcChannels.DbImportedClear),
+
+  getImportedTargets: () => ipcRenderer.invoke(IpcChannels.DbImportedTargetsList),
+
+  getImportedPingHistory: (query) =>
+    ipcRenderer.invoke(IpcChannels.DbImportedPingHistoryList, query),
+
   getAlertRules: (targetId) => ipcRenderer.invoke(IpcChannels.AlertRulesList, targetId),
 
   createAlertRule: (input) => ipcRenderer.invoke(IpcChannels.AlertRulesCreate, input),

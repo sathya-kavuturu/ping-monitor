@@ -98,6 +98,26 @@ export interface DbTableStats {
   bytes: number
 }
 
+export interface ExportDatabaseResult {
+  /** True if the user dismissed the save dialog without picking a location. */
+  canceled: boolean
+  path?: string
+}
+
+export interface ImportDatabaseResult {
+  /** True if the user dismissed the open dialog without picking a file. */
+  canceled: boolean
+  path?: string
+  targetCount?: number
+}
+
+/** Whether a database has been imported (see `importDatabase`) and, if so, what/when. */
+export interface ImportedDbInfo {
+  /** The original file path the user picked to import, or `null` if nothing's been imported (or it was cleared). */
+  sourcePath: string | null
+  importedAt: string | null
+}
+
 /** See `src/main/db/storage-stats.ts` for how each field is derived. */
 export interface DbStorageStats {
   /** Total on-disk size of the database file(s) right now. */
@@ -185,6 +205,15 @@ export interface ExposedApi {
   getPingHistory: (query: PingHistoryQuery) => Promise<PingHistoryRecord[]>
   getHopHistory: (query: HopHistoryQuery) => Promise<HopRecord[]>
   getDbStorageStats: () => Promise<DbStorageStats>
+  /** Opens a save dialog and writes a full copy of the live database there. */
+  exportDatabase: () => Promise<ExportDatabaseResult>
+  /** Opens a file dialog and imports the chosen file as a separate, read-only dataset - never merged into the live database. */
+  importDatabase: () => Promise<ImportDatabaseResult>
+  getImportedDbInfo: () => Promise<ImportedDbInfo>
+  /** Deletes the imported dataset (the app-owned copy, not the user's original file). */
+  clearImportedDatabase: () => Promise<void>
+  getImportedTargets: () => Promise<Target[]>
+  getImportedPingHistory: (query: PingHistoryQuery) => Promise<PingHistoryRecord[]>
   /** Omit `targetId` to list alert rules across every target (used by the consolidated Alerts view). */
   getAlertRules: (targetId?: string) => Promise<AlertRule[]>
   createAlertRule: (input: CreateAlertRuleInput) => Promise<AlertRule>

@@ -1,5 +1,5 @@
 import { getPrisma } from './client'
-import type { PingHistory } from '../../generated/prisma/client'
+import type { PingHistory, PrismaClient } from '../../generated/prisma/client'
 import type { PingHistoryQuery } from '../../shared/types'
 
 export interface RawPingSample {
@@ -66,6 +66,18 @@ const DEFAULT_LIMIT = 500
 const MAX_LIMIT = 50_000
 
 export async function getPingHistory(query: PingHistoryQuery): Promise<PingHistory[]> {
+  return queryPingHistory(getPrisma(), query)
+}
+
+/**
+ * Shared by the live DB (`getPingHistory`) and the read-only imported-DB
+ * viewer (`import-export.ts`) - identical query logic, just against
+ * whichever `PrismaClient` the caller hands in.
+ */
+export async function queryPingHistory(
+  prisma: PrismaClient,
+  query: PingHistoryQuery
+): Promise<PingHistory[]> {
   const { targetId, from, to } = query
 
   // An explicit `from`/`to` (the history chart's day/week/month presets)
@@ -89,7 +101,7 @@ export async function getPingHistory(query: PingHistoryQuery): Promise<PingHisto
   // of history, the UI would get stuck showing the same old window
   // forever and never advance. Fetch the most recent `limit` rows instead,
   // then flip back to chronological order for the caller.
-  const rows = await getPrisma().pingHistory.findMany({
+  const rows = await prisma.pingHistory.findMany({
     where: {
       targetId,
       bucketStart: { gte: from, lte: to }

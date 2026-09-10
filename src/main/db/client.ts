@@ -11,7 +11,7 @@ export function getDatabasePath(): string {
   return join(app.getPath('userData'), 'app.db')
 }
 
-function getMigrationsDir(): string {
+export function getMigrationsDir(): string {
   // `prisma/migrations` is shipped alongside the app code (see
   // electron-builder.yml `files`), so this resolves the same way in dev
   // (project root) and in a packaged build (app.asar root).

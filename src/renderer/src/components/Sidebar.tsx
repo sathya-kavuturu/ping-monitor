@@ -119,6 +119,17 @@ function Sidebar({
           </button>
         </li>
         <li>
+          <button
+            type="button"
+            className={`target-item ${mainView === 'imported-data' ? 'is-selected' : ''}`}
+            onClick={() => onSelectView('imported-data')}
+          >
+            <span className="target-info">
+              <span className="target-name">Imported Data</span>
+            </span>
+          </button>
+        </li>
+        <li>
           <button type="button" className="target-item" onClick={onOpenHelp}>
             <span className="target-info">
               <span className="target-name">Help</span>

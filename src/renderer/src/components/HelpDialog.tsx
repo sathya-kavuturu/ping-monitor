@@ -91,6 +91,23 @@ function HelpDialog({ onClose }: HelpDialogProps): React.JSX.Element {
               you're currently monitoring - useful for gauging how much disk space history will need
               over time.
             </li>
+            <li>
+              <strong>Export database…</strong> saves a full copy of the live database to a file you
+              choose. <strong>Import database…</strong> loads a previously-exported file as a
+              separate, read-only dataset - it never touches or merges into the live database, so it
+              can't disrupt anything currently being monitored.
+            </li>
+          </ul>
+        </section>
+
+        <section>
+          <h3>Imported Data tab</h3>
+          <ul>
+            <li>
+              Browse whatever's been imported: pick a target from the file to see its latency
+              history plotted on its own, separate from live monitoring. "Clear import" deletes the
+              app's copy (not your original exported file).
+            </li>
           </ul>
         </section>
 

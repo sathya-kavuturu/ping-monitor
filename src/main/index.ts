@@ -12,6 +12,7 @@ import type {
 } from '../shared/types'
 import { NetworkEngine } from './network/engine'
 import { resolveHostname } from './network/forward-dns'
+import { closeNativeIcmp } from './network/icmp-windows'
 import { resolveHopHosting } from './network/ip-hosting'
 import { AlertWatchdog } from './alerting/watchdog'
 import { notifyAlertEvent } from './alerting/notifications'
@@ -30,6 +31,14 @@ import {
 import { savePingRollup, getPingHistory, type RawPingSample } from './db/ping-history'
 import { saveHopHistory, getHopHistory } from './db/hop-history'
 import { getDbStorageStats } from './db/storage-stats'
+import {
+  clearImportedDatabase,
+  exportDatabase,
+  getImportedDbInfo,
+  getImportedPingHistory,
+  importDatabase,
+  listImportedTargets
+} from './db/import-export'
 import {
   createAlertRule,
   listAlertRules,
@@ -303,6 +312,38 @@ function registerIpcHandlers(): void {
     return getDbStorageStats()
   })
 
+  ipcMain.handle(IpcChannels.DbExport, async (event) => {
+    assertTrustedSender(event.senderFrame)
+    if (!mainWindow) throw new Error('No window available to show the save dialog')
+    return exportDatabase(mainWindow)
+  })
+
+  ipcMain.handle(IpcChannels.DbImport, async (event) => {
+    assertTrustedSender(event.senderFrame)
+    if (!mainWindow) throw new Error('No window available to show the open dialog')
+    return importDatabase(mainWindow)
+  })
+
+  ipcMain.handle(IpcChannels.DbImportedInfo, async (event) => {
+    assertTrustedSender(event.senderFrame)
+    return getImportedDbInfo()
+  })
+
+  ipcMain.handle(IpcChannels.DbImportedClear, async (event) => {
+    assertTrustedSender(event.senderFrame)
+    await clearImportedDatabase()
+  })
+
+  ipcMain.handle(IpcChannels.DbImportedTargetsList, async (event) => {
+    assertTrustedSender(event.senderFrame)
+    return listImportedTargets()
+  })
+
+  ipcMain.handle(IpcChannels.DbImportedPingHistoryList, async (event, query: PingHistoryQuery) => {
+    assertTrustedSender(event.senderFrame)
+    return getImportedPingHistory(query)
+  })
+
   ipcMain.handle(IpcChannels.AlertRulesList, async (event, targetId?: string) => {
     assertTrustedSender(event.senderFrame)
     return listAlertRules(targetId)
@@ -402,6 +443,7 @@ app.on('before-quit', () => {
   engine.stopAll()
   if (rollupFlushTimer) clearInterval(rollupFlushTimer)
   destroyTray()
+  closeNativeIcmp()
   void closeDatabase()
 })
 

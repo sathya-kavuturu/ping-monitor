@@ -1,5 +1,8 @@
 import { spawn } from 'child_process'
 import type { HopSample } from '../../shared/types'
+import { isNativeIcmpAvailable } from './icmp-windows'
+import { resolveIPv4 } from './resolve-ipv4'
+import { runTracerouteNative } from './traceroute-windows'
 
 const MAX_HOPS = 30
 const PER_HOP_TIMEOUT_SECONDS = 1
@@ -108,7 +111,7 @@ export function parseWindowsLine(line: string): HopSample | null {
  * a row (`address: null, latencyMs: null`) instead of being dropped, so hop
  * numbering stays accurate for the UI.
  */
-export function runTraceroute(host: string): Promise<HopSample[]> {
+function runTracerouteSubprocess(host: string): Promise<HopSample[]> {
   const { command, args } = buildCommand(host)
   const parseLine = process.platform === 'win32' ? parseWindowsLine : parseUnixLine
 
@@ -153,4 +156,30 @@ export function runTraceroute(host: string): Promise<HopSample[]> {
       finish(hops)
     })
   })
+}
+
+/**
+ * Traces the route to `host`. On Windows, this goes through
+ * `traceroute-windows.ts`'s native path first: every hop probed through the
+ * same persistent ICMP handle `ping-probe.ts` already uses, instead of
+ * spawning `tracert` every 30 seconds - removing traceroute's own traffic as
+ * a source of contention with concurrent ping ticks (the second suspected
+ * cause of false "loss" bars, alongside subprocess-spawn jitter in
+ * ping-probe.ts). Falls back to the original subprocess-based tracer for
+ * non-Windows platforms, an AAAA-only host, or if the native path fails to
+ * initialize at all.
+ */
+export async function runTraceroute(host: string): Promise<HopSample[]> {
+  if (isNativeIcmpAvailable()) {
+    const ipv4 = await resolveIPv4(host)
+    if (ipv4) {
+      try {
+        return await runTracerouteNative(host, ipv4)
+      } catch (error) {
+        console.error(`Native traceroute failed for ${host}, falling back to OS tracert:`, error)
+      }
+    }
+  }
+
+  return runTracerouteSubprocess(host)
 }
