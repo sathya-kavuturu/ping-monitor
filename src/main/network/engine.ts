@@ -43,6 +43,11 @@ const DEFAULT_PING_INTERVAL_MS = 1_000
 // overrides it today, so it's the cadence every target actually runs at.
 export const DEFAULT_TRACE_INTERVAL_MS = 30_000
 const DEFAULT_DEGRADED_THRESHOLD_MS = 150
+// How many evenly-spaced slots a traceroute cadence is divided into for
+// staggering - see the comment in track(). Six slots against the 30s default
+// spreads targets 5s apart, which is enough to stop their traces overlapping
+// without meaningfully delaying any individual target's own cadence.
+const TRACE_STAGGER_SLOTS = 6
 
 /**
  * Owns one ping loop + one traceroute loop per monitored target. Callers
@@ -115,11 +120,23 @@ export class NetworkEngine {
   }
 
   private track(target: EngineTarget): void {
+    // Stagger each target's first (and, since the schedule is relative to
+    // when the previous run finished, its ongoing) traceroute so targets
+    // don't all fall due on the same tick. Every target starts with
+    // `lastTraceAt: 0`, so `dueForTrace` in tick() would otherwise go true
+    // for all of them simultaneously the moment they're tracked - and stay
+    // roughly in lockstep every `traceIntervalMs` after that. On Windows,
+    // where a trace fans out to many concurrent native ICMP hop probes (see
+    // traceroute-windows.ts), several targets' traces landing on the same
+    // tick multiplies that concurrency and was observed to queue ordinary
+    // ping probes behind it long enough to read as false packet loss.
+    const staggerMs =
+      ((this.states.size % TRACE_STAGGER_SLOTS) * this.traceIntervalMs) / TRACE_STAGGER_SLOTS
     const state: TargetState = {
       target,
       pingInFlight: false,
       traceInFlight: false,
-      lastTraceAt: 0,
+      lastTraceAt: Date.now() - this.traceIntervalMs + staggerMs,
       lastHops: [],
       hopsCapturedAt: null,
       timer: setInterval(() => void this.tick(target.id), this.pingIntervalMs)
