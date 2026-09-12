@@ -6,6 +6,8 @@ export interface PingHistorySeries {
   avgLatency: (number | null)[]
   /** Unix seconds of every rollup bucket with at least one lost sample - drives `TimelineChart`'s red loss markers when it's showing a long (history-backed) range. */
   lostBucketSeconds: number[]
+  /** Loss percentage (0-100) actually recorded for each bucket's minute - the history-mode equivalent of `computeRollingLossPercent`'s rolling window, since a rollup row already IS a fixed one-minute aggregate rather than individual samples. */
+  lossPercent: number[]
 }
 
 /**
@@ -20,6 +22,9 @@ export function buildPingHistorySeries(records: PingHistoryRecord[]): PingHistor
   const lostBucketSeconds = records
     .filter((record) => record.lostCount > 0)
     .map((record) => Math.round(new Date(record.bucketStart).getTime() / 1000))
+  const lossPercent = records.map((record) =>
+    record.sampleCount > 0 ? Math.round((record.lostCount / record.sampleCount) * 100) : 0
+  )
 
-  return { xs, avgLatency, lostBucketSeconds }
+  return { xs, avgLatency, lostBucketSeconds, lossPercent }
 }

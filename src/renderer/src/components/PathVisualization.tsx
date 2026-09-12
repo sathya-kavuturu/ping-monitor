@@ -43,13 +43,22 @@ function nodeStatus(node: PathNode): NodeStatus {
   return 'online'
 }
 
-function nodeLabel(node: PathNode, isLast: boolean, targetName: string): string {
+function nodeLabel(
+  node: PathNode,
+  isLast: boolean,
+  targetName: string,
+  hostingByAddress: Map<string, HopHostingInfo | null>
+): string {
   if (node.hopNumber === YOU_HOP_NUMBER) return 'You'
   if (isLast) return targetName
-  // Prefer the reverse-DNS hostname (e.g. "ae12.core1.lon.example.net") over
-  // a bare "Hop N" label - falls back to the hop number for a hop that
-  // never replied, or one whose PTR lookup found nothing.
-  return node.hostname ?? `Hop ${node.hopNumber}`
+  const hosting = node.address ? hostingByAddress.get(node.address) : null
+  // Prefer the hop's hosting/network org name (e.g. "Google LLC", "Comcast
+  // Cable Communications") over a raw reverse-DNS hostname - it says WHO
+  // operates that hop at a glance, which a PTR record's hostname usually
+  // doesn't make obvious. Falls back to the hostname, then the bare hop
+  // number, for whichever of those isn't available (or never will be, for
+  // a silent hop).
+  return hosting?.org ?? hosting?.isp ?? node.hostname ?? `Hop ${node.hopNumber}`
 }
 
 function statusText(status: NodeStatus): string {
@@ -235,7 +244,7 @@ function PathVisualization({
                         ref={registerNodeRef(node.key)}
                       />
                       <span className="path-node-label">
-                        {nodeLabel(node, isLastColumn, targetName)}
+                        {nodeLabel(node, isLastColumn, targetName, hostingByAddress)}
                       </span>
                       {isBranch && (
                         <span className="path-node-branch-tag">

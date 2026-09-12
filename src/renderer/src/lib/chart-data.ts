@@ -51,10 +51,18 @@ export const TIMELINE_RANGE_PRESETS: TimelineRangePreset[] = [
   ...HISTORY_RANGE_PRESETS.map((preset) => ({ ...preset, source: 'history' as const }))
 ]
 
-// Trailing-sample window used to smooth the packet-loss series - a raw
+// Trailing WALL-CLOCK window used to smooth the packet-loss series - a raw
 // per-sample 0/100 signal is too spiky to read as a trend at a glance.
-// 30 samples is ~30s at the engine's 1s ping cadence.
-const LOSS_ROLLING_WINDOW = 30
+// Deliberately time-based rather than sample-count-based: a fixed sample
+// count spans a shorter real time window at a faster ping interval, which
+// would make an identical underlying loss RATE read as a higher percentage
+// just because more (and more closely-spaced) samples land in the window -
+// exactly the "1s interval looks worse than 3s" effect this is meant to
+// correct for. A trailing 30 SECONDS means the reported percentage means the
+// same thing regardless of cadence. (30_000ms also exactly reproduces the
+// old 30-sample window's behavior at the engine's 1s default, since a
+// same-cadence run's samples are ~1000ms apart.)
+const LOSS_ROLLING_WINDOW_MS = 30_000
 
 export interface ChartSeries {
   /** Unix seconds (uPlot's expected unit for its time axis), ascending. */
@@ -66,21 +74,25 @@ export interface ChartSeries {
 }
 
 /**
- * Rolling loss percentage (0-100) over the trailing `LOSS_ROLLING_WINDOW`
- * samples ending at each index - shared by `buildChartSeries` (per-target
- * timeline) and the Overview tab's cross-target series (`overview-chart.ts`),
- * so both use the exact same smoothing.
+ * Rolling loss percentage (0-100) over the trailing `LOSS_ROLLING_WINDOW_MS`
+ * ending at each index - shared by `buildChartSeries` (per-target timeline)
+ * and the Overview tab's cross-target series (`overview-chart.ts`), so both
+ * use the exact same smoothing.
  */
 export function computeRollingLossPercent(updates: NetworkUpdate[]): number[] {
   const lossPercent: number[] = new Array(updates.length)
+  let windowStart = 0
   let lostInWindow = 0
 
   for (let i = 0; i < updates.length; i++) {
     if (updates[i].latencyMs === null) lostInWindow += 1
-    const dropIndex = i - LOSS_ROLLING_WINDOW
-    if (dropIndex >= 0 && updates[dropIndex].latencyMs === null) lostInWindow -= 1
 
-    const windowSize = Math.min(i + 1, LOSS_ROLLING_WINDOW)
+    while (updates[i].timestamp - updates[windowStart].timestamp >= LOSS_ROLLING_WINDOW_MS) {
+      if (updates[windowStart].latencyMs === null) lostInWindow -= 1
+      windowStart += 1
+    }
+
+    const windowSize = i - windowStart + 1
     lossPercent[i] = Math.round((lostInWindow / windowSize) * 100)
   }
 

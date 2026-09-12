@@ -4,7 +4,7 @@ import 'uplot/dist/uPlot.min.css'
 import type { NetworkUpdate, PingHistoryRecord } from '../../../shared/types'
 import { buildChartSeries, TIMELINE_RANGE_PRESETS } from '../lib/chart-data'
 import { buildPingHistorySeries } from '../lib/ping-history-chart'
-import { drawLossMarkers } from '../lib/chart-loss-markers'
+import { COLOR_LOSS, drawLossMarkers } from '../lib/chart-loss-markers'
 import { formatLegendTimestamp } from '../lib/chart-legend'
 import TimeRangeControls from './TimeRangeControls'
 
@@ -31,6 +31,9 @@ interface TimelineChartProps {
 const COLOR_LATENCY = '#4f8cff'
 const COLOR_AXIS = '#8b91a2'
 const COLOR_GRID = 'rgba(255, 255, 255, 0.08)'
+// A muted, translucent version of the loss-bar red - reads as "the same
+// signal, smoothed" rather than a second, competing alarm color.
+const COLOR_LOSS_TREND = 'rgba(230, 84, 62, 0.6)'
 
 // While a history-backed range (24h/7d/30d) is selected, re-fetch on this
 // cadence so the chart still advances roughly in step with the engine's
@@ -51,6 +54,9 @@ function buildOptions(
       x: { time: true },
       y: {
         range: (_self, _min, max) => [0, Math.max(50, max * 1.2)]
+      },
+      loss: {
+        range: [0, 100]
       }
     },
     axes: [
@@ -65,6 +71,15 @@ function buildOptions(
         stroke: COLOR_AXIS,
         grid: { stroke: COLOR_GRID },
         ticks: { stroke: COLOR_GRID }
+      },
+      {
+        scale: 'loss',
+        side: 1,
+        label: 'Loss %',
+        stroke: COLOR_AXIS,
+        grid: { show: false },
+        ticks: { stroke: COLOR_GRID },
+        values: (_u, ticks) => ticks.map((tick) => `${tick}%`)
       }
     ],
     series: [
@@ -79,6 +94,16 @@ function buildOptions(
         // leaving a blank sliver on either side of it - see `drawLossMarkers`.
         spanGaps: true,
         points: { show: false }
+      },
+      {
+        label: 'Loss (rolling)',
+        scale: 'loss',
+        stroke: COLOR_LOSS_TREND,
+        width: 1.5,
+        dash: [4, 3],
+        spanGaps: true,
+        points: { show: false },
+        value: (_u, v) => (v == null ? '--' : `${Math.round(v)}%`)
       }
     ],
     legend: { show: true },
@@ -116,12 +141,19 @@ function buildOptions(
  * Packet Loss" and "Ping History"), merged into one so switching between
  * "how far back am I looking" doesn't mean switching sections of the page.
  *
- * There's no packet-loss line/scale anymore - instead, every lost ping (a
- * `null` latency sample, or a rollup bucket with `lostCount > 0`) draws as a
+ * Loss is shown two ways at once, deliberately: every lost ping (a `null`
+ * latency sample, or a rollup bucket with `lostCount > 0`) still draws as a
  * thin red vertical bar across the full chart height (see
- * `drawLossMarkers`, shared with the Overview tab's charts), a much
- * harder-to-miss signal than a smoothed percentage line, especially for an
- * isolated single lost ping.
+ * `drawLossMarkers`, shared with the Overview tab's charts) - the
+ * hard-to-miss signal for "a packet was lost right here". Alongside it, a
+ * dashed "Loss (rolling)" line on its own 0-100% right-hand axis shows the
+ * trailing-30-second loss rate (`computeRollingLossPercent`/
+ * `buildPingHistorySeries`'s per-bucket rate in history mode) - because a
+ * faster ping interval naturally produces more (and more closely spaced)
+ * red bars for the exact same underlying reliability, just from sampling
+ * more often. The rolling line answers "is this actually a lot of loss, or
+ * just a lot of samples" at a glance, without needing to mentally adjust
+ * for whatever cadence is currently configured.
  */
 function TimelineChart({
   targetId,
@@ -294,11 +326,13 @@ function TimelineChart({
 
     let xs: number[]
     let latency: (number | null)[]
+    let lossPercent: number[]
 
     if (selectedPreset.source === 'history') {
       const series = buildPingHistorySeries(historyRecords)
       xs = series.xs
       latency = series.avgLatency
+      lossPercent = series.lossPercent
       lostSecondsRef.current = series.lostBucketSeconds
     } else {
       const cutoff = Date.now() - rangeMs
@@ -306,6 +340,7 @@ function TimelineChart({
       const series = buildChartSeries(inRange)
       xs = series.xs
       latency = series.latency
+      lossPercent = series.lossPercent
       lostSecondsRef.current = series.xs.filter((_, index) => series.latency[index] === null)
     }
 
@@ -314,7 +349,7 @@ function TimelineChart({
     // canvas simply never repaints on a plain data tick, and the picture
     // only updates in one big jump whenever some unrelated layout reflow
     // happens to fire the ResizeObserver above.
-    plot.setData([xs, latency], false)
+    plot.setData([xs, latency, lossPercent], false)
     if (isZoomedRef.current) {
       // A manual drag-zoom is active - redraw() (rebuildPaths defaults true)
       // reapplies the plot's CURRENT x-scale bounds, preserving that zoom

@@ -6,18 +6,12 @@ import { buildPingHistorySeries } from '../lib/ping-history-chart'
 import { TIMELINE_RANGE_PRESETS } from '../lib/chart-data'
 import { drawLossMarkers } from '../lib/chart-loss-markers'
 import { formatLegendTimestamp } from '../lib/chart-legend'
-import type { PacketLossAnomaly } from '../lib/packet-loss-anomaly'
-import { plotOffsetCss } from '../lib/uplot-position'
-import ChartAnomalyOverlay, { type AnomalyMarker } from './ChartAnomalyOverlay'
 
 // While a history-backed range (24h/7d/30d) is selected, re-fetch on this
 // cadence so the chart still advances roughly in step with the engine's own
 // 1-minute rollup flush, without needing a manual refresh button - mirrors
 // `TimelineChart`'s identical constant.
 const HISTORY_REFRESH_MS = 60_000
-
-/** How far below the plot's top edge the anomaly-marker rail sits, in CSS px. */
-const ANOMALY_RAIL_OFFSET = 10
 
 /** The x-axis range one individual chart's drag-zoom produced, broadcast to the rest. */
 export interface SyncedZoomRange {
@@ -41,12 +35,14 @@ interface IndividualLatencyChartProps {
   onZoomChange: (targetId: string, isZoomed: boolean, min: number, max: number) => void
   /** Latest drag-zoom range from any individual chart (including this one) - applied to all but the source. */
   syncedRange: SyncedZoomRange | null
-  /** This target's cross-target packet-loss outliers - see `detectPacketLossAnomalies`. */
-  anomalies: PacketLossAnomaly[]
 }
 
 const COLOR_AXIS = '#8b91a2'
 const COLOR_GRID = 'rgba(255, 255, 255, 0.08)'
+// A muted, translucent version of the loss-bar red - reads as "the same
+// signal, smoothed" rather than a second, competing alarm color. Matches
+// `TimelineChart`'s identical constant.
+const COLOR_LOSS_TREND = 'rgba(230, 84, 62, 0.6)'
 
 function buildOptions(
   width: number,
@@ -62,7 +58,8 @@ function buildOptions(
     padding: [12, 12, 0, 0],
     scales: {
       x: { time: true },
-      y: { range: (_self, _min, max) => [0, Math.max(50, max * 1.2)] }
+      y: { range: (_self, _min, max) => [0, Math.max(50, max * 1.2)] },
+      loss: { range: [0, 100] }
     },
     axes: [
       { stroke: COLOR_AXIS, grid: { stroke: COLOR_GRID }, ticks: { stroke: COLOR_GRID } },
@@ -71,13 +68,32 @@ function buildOptions(
         stroke: COLOR_AXIS,
         grid: { stroke: COLOR_GRID },
         ticks: { stroke: COLOR_GRID }
+      },
+      {
+        scale: 'loss',
+        side: 1,
+        label: 'Loss %',
+        stroke: COLOR_AXIS,
+        grid: { show: false },
+        ticks: { stroke: COLOR_GRID },
+        values: (_u, ticks) => ticks.map((tick) => `${tick}%`)
       }
     ],
     series: [
       { value: formatLegendTimestamp },
       // spanGaps: runs the line right up to a loss marker instead of leaving
       // a blank sliver on either side of it - see `drawLossMarkers`.
-      { label, stroke: color, width: 2, spanGaps: true, points: { show: false } }
+      { label, stroke: color, width: 2, spanGaps: true, points: { show: false } },
+      {
+        label: 'Loss (rolling)',
+        scale: 'loss',
+        stroke: COLOR_LOSS_TREND,
+        width: 1.5,
+        dash: [4, 3],
+        spanGaps: true,
+        points: { show: false },
+        value: (_u, v) => (v == null ? '--' : `${Math.round(v)}%`)
+      }
     ],
     legend: { show: true },
     cursor: { drag: { x: true, y: false } },
@@ -90,17 +106,9 @@ function buildOptions(
           onXScaleChange(min, max)
         }
       ],
-      // Recompute marker pixel positions only after uPlot has actually
-      // finished a redraw - reading valToPos() any earlier (e.g. right after
-      // calling setData/redraw) can see stale scale bounds, since the real
-      // scale recalculation happens inside uPlot's own deferred commit.
       draw: [onDraw]
     }
   }
-}
-
-function anomalyMarkerKey(targetId: string, index: number): string {
-  return `${targetId}-${index}`
 }
 
 /**
@@ -109,6 +117,12 @@ function anomalyMarkerKey(targetId: string, index: number): string {
  * of all of them overlaid on one. Reuses `buildOverviewChartData` (fed a
  * single-target array) so the x-axis bucketing matches the combined view
  * exactly.
+ *
+ * Loss is shown two ways at once, same as `TimelineChart`: every lost ping
+ * still draws as a thin red vertical bar (`drawLossMarkers`), and a dashed
+ * "Loss (rolling)" line on its own 0-100% right-hand axis shows the
+ * trailing-30-second loss rate, so a burst of bars at a fast ping interval
+ * doesn't read as worse than the same underlying rate at a slower one.
  */
 function IndividualLatencyChart({
   targetId,
@@ -120,8 +134,7 @@ function IndividualLatencyChart({
   color,
   resetSignal,
   onZoomChange,
-  syncedRange,
-  anomalies
+  syncedRange
 }: IndividualLatencyChartProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const plotRef = useRef<uPlot | null>(null)
@@ -160,41 +173,10 @@ function IndividualLatencyChart({
   // otherwise ping-pong the range between every open chart forever.
   const isSyncingRef = useRef(false)
 
-  const targetLabel = `${targetName} (${targetHost})`
-  // Read inside the draw hook below, which closes over the plot instance
-  // created once on mount - a ref keeps it seeing the latest anomaly list
-  // without recreating the plot on every data tick.
-  const anomaliesRef = useRef(anomalies)
-  useEffect(() => {
-    anomaliesRef.current = anomalies
-  }, [anomalies])
-
-  const [markers, setMarkers] = useState<AnomalyMarker[]>([])
-
   // Read inside the draw hook below, which closes over the plot instance
   // created once on mount - a ref keeps it seeing the latest set of lost-
   // ping timestamps without recreating the plot on every data tick.
   const lostSecondsRef = useRef<number[]>([])
-
-  const recomputeMarkers = (u: uPlot): void => {
-    const { min: xMin, max: xMax } = u.scales.x
-    const { left, top } = plotOffsetCss(u)
-    const next = anomaliesRef.current
-      .filter(
-        (a) => xMin == null || xMax == null || (a.timestampSec >= xMin && a.timestampSec <= xMax)
-      )
-      .map((a) => ({
-        key: anomalyMarkerKey(a.targetId, a.index),
-        left: left + u.valToPos(a.timestampSec, 'x', false),
-        top: top + ANOMALY_RAIL_OFFSET,
-        targetLabel,
-        timestampSec: a.timestampSec,
-        lossPercent: a.lossPercent,
-        othersAvgLossPercent: a.othersAvgLossPercent,
-        latencyMs: a.latencyMs
-      }))
-    setMarkers(next)
-  }
 
   useEffect(() => {
     const container = containerRef.current
@@ -214,12 +196,9 @@ function IndividualLatencyChart({
             onZoomChangeRef.current(targetId, zoomed, min, max)
           }
         },
-        (u) => {
-          recomputeMarkers(u)
-          drawLossMarkers(u, lostSecondsRef.current)
-        }
+        (u) => drawLossMarkers(u, lostSecondsRef.current)
       ),
-      [[], []],
+      [[], [], []],
       container
     )
     plotRef.current = plot
@@ -242,7 +221,6 @@ function IndividualLatencyChart({
       resizeObserver.disconnect()
       plot.destroy()
       plotRef.current = null
-      setMarkers([])
     }
     // Rebuild only on identity/label/color change - not on every data tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -301,11 +279,13 @@ function IndividualLatencyChart({
 
     let xs: number[]
     let latency: (number | null)[]
+    let lossPercent: number[]
 
     if (selectedPreset.source === 'history') {
       const series = buildPingHistorySeries(historyRecords)
       xs = series.xs
       latency = series.avgLatency
+      lossPercent = series.lossPercent
       lostSecondsRef.current = series.lostBucketSeconds
     } else {
       const built = buildOverviewChartData(
@@ -316,6 +296,7 @@ function IndividualLatencyChart({
       )
       xs = built.xs
       latency = built.series[0]?.latency ?? []
+      lossPercent = built.series[0]?.lossPercent ?? []
       lostSecondsRef.current = xs.filter((_, index) => latency[index] === null)
     }
 
@@ -324,7 +305,7 @@ function IndividualLatencyChart({
     // canvas simply never repaints on a plain data tick, and the picture
     // only updates in one big jump whenever some unrelated layout reflow
     // happens to fire the ResizeObserver above.
-    plot.setData([xs, latency], false)
+    plot.setData([xs, latency, lossPercent], false)
     if (isZoomedRef.current) {
       // A manual drag-zoom is active - redraw() (rebuildPaths defaults true)
       // reapplies the plot's CURRENT x-scale bounds, preserving that zoom
@@ -376,7 +357,6 @@ function IndividualLatencyChart({
         ref={containerRef}
         className={`timeline-chart overview-chart overview-chart--individual ${isZoomed ? 'timeline-chart--zoomed' : ''}`}
       />
-      <ChartAnomalyOverlay markers={markers} />
     </div>
   )
 }

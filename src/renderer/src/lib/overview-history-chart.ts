@@ -5,6 +5,8 @@ export interface OverviewHistoryData {
   xs: number[]
   /** Per-target avg-latency arrays, in the same order as the `targets` argument, aligned to `xs` (`null` = no rollup for that target at that bucket). */
   series: (number | null)[][]
+  /** Per-target loss-percentage arrays (that bucket's own `lostCount/sampleCount`), same order/alignment as `series` - `null` where that target has no rollup for the bucket. */
+  lossPercent: (number | null)[][]
   /** Union of every bucket (across all targets) with at least one lost sample - feeds the combined chart's red loss markers. */
   lostSeconds: number[]
 }
@@ -43,6 +45,19 @@ export function buildOverviewHistoryData(
     const buckets = bucketsByTarget.get(target.id)
     return xs.map((seconds) => buckets?.get(seconds)?.avgLatencyMs ?? null)
   })
+  const lossPercent = targets.map((target) => {
+    const buckets = bucketsByTarget.get(target.id)
+    return xs.map((seconds) => {
+      const record = buckets?.get(seconds)
+      if (!record) return null
+      return record.sampleCount > 0 ? Math.round((record.lostCount / record.sampleCount) * 100) : 0
+    })
+  })
 
-  return { xs, series, lostSeconds: Array.from(lostSecondsSet).sort((a, b) => a - b) }
+  return {
+    xs,
+    series,
+    lossPercent,
+    lostSeconds: Array.from(lostSecondsSet).sort((a, b) => a - b)
+  }
 }

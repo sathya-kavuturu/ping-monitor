@@ -8,24 +8,14 @@ import { buildOverviewHistoryData } from '../lib/overview-history-chart'
 import { TIMELINE_RANGE_PRESETS } from '../lib/chart-data'
 import { drawLossMarkers } from '../lib/chart-loss-markers'
 import { formatLegendTimestamp } from '../lib/chart-legend'
-import { detectPacketLossAnomalies, type PacketLossAnomaly } from '../lib/packet-loss-anomaly'
-import { plotOffsetCss } from '../lib/uplot-position'
 import TimeRangeControls from './TimeRangeControls'
 import IndividualLatencyChart, { type SyncedZoomRange } from './IndividualLatencyChart'
-import ChartAnomalyOverlay, { type AnomalyMarker } from './ChartAnomalyOverlay'
 
 // While a history-backed range (24h/7d/30d) is selected, re-fetch on this
 // cadence so the chart still advances roughly in step with the engine's own
 // 1-minute rollup flush, without needing a manual refresh button - mirrors
 // `TimelineChart`'s identical constant.
 const HISTORY_REFRESH_MS = 60_000
-
-/** How far below the plot's top edge the anomaly-marker rail sits, in CSS px. */
-const ANOMALY_RAIL_OFFSET = 10
-
-function anomalyMarkerKey(targetId: string, index: number): string {
-  return `${targetId}-${index}`
-}
 
 interface OverviewChartProps {
   targets: TargetWithStatus[]
@@ -69,7 +59,8 @@ function buildOptions(
     padding: [12, 12, 0, 0],
     scales: {
       x: { time: true },
-      y: { range: (_self, _min, max) => [0, Math.max(50, max * 1.2)] }
+      y: { range: (_self, _min, max) => [0, Math.max(50, max * 1.2)] },
+      loss: { range: [0, 100] }
     },
     axes: [
       { stroke: COLOR_AXIS, grid: { stroke: COLOR_GRID }, ticks: { stroke: COLOR_GRID } },
@@ -78,6 +69,15 @@ function buildOptions(
         stroke: COLOR_AXIS,
         grid: { stroke: COLOR_GRID },
         ticks: { stroke: COLOR_GRID }
+      },
+      {
+        scale: 'loss',
+        side: 1,
+        label: 'Loss %',
+        stroke: COLOR_AXIS,
+        grid: { show: false },
+        ticks: { stroke: COLOR_GRID },
+        values: (_u, ticks) => ticks.map((tick) => `${tick}%`)
       }
     ],
     series: [
@@ -90,6 +90,21 @@ function buildOptions(
         width: 2,
         spanGaps: true,
         points: { show: false }
+      })),
+      // One dashed "rolling loss %" line per target, same color as its
+      // latency line so the pair reads as one target, on its own 0-100%
+      // axis - see `TimelineChart`'s identical mechanism for why (a burst
+      // of loss bars at a fast ping interval shouldn't read as worse than
+      // the same underlying rate at a slower one).
+      ...labels.map((label, index) => ({
+        label: `${label} (loss)`,
+        scale: 'loss',
+        stroke: colorFor(index),
+        width: 1.5,
+        dash: [4, 3] as [number, number],
+        spanGaps: true,
+        points: { show: false },
+        value: (_u: uPlot, v: number | null) => (v == null ? '--' : `${Math.round(v)}%`)
       }))
     ],
     legend: { show: true },
@@ -106,10 +121,6 @@ function buildOptions(
           onXScaleChange(min, max)
         }
       ],
-      // Recompute marker pixel positions only after uPlot has actually
-      // finished a redraw - reading valToPos() any earlier (e.g. right after
-      // calling setData/redraw) can see stale scale bounds, since the real
-      // scale recalculation happens inside uPlot's own deferred commit.
       draw: [onDraw]
     }
   }
@@ -285,53 +296,6 @@ function OverviewChart({
   )
   const { xs, series } = overviewData
 
-  const anomaliesByTarget = useMemo(() => detectPacketLossAnomalies(xs, series), [xs, series])
-
-  const labelByTargetId = useMemo(() => new Map(series.map((s) => [s.targetId, s.label])), [series])
-  const labelByTargetIdRef = useRef(labelByTargetId)
-  useEffect(() => {
-    labelByTargetIdRef.current = labelByTargetId
-  }, [labelByTargetId])
-
-  const combinedAnomalies = useMemo(
-    () => Array.from(anomaliesByTarget.values()).flat(),
-    [anomaliesByTarget]
-  )
-  // Read inside the combined chart's `draw` hook, which closes over the plot
-  // instance created once on mount - a ref keeps it seeing the latest
-  // anomalies without recreating the plot on every data tick.
-  const combinedAnomaliesRef = useRef<PacketLossAnomaly[]>(combinedAnomalies)
-  useEffect(() => {
-    combinedAnomaliesRef.current = combinedAnomalies
-  }, [combinedAnomalies])
-
-  const [combinedMarkers, setCombinedMarkers] = useState<AnomalyMarker[]>([])
-
-  // Read inside the combined chart's `draw` hook, which closes over the plot
-  // instance created once on mount - a ref keeps it seeing the latest set of
-  // lost-ping timestamps without recreating the plot on every data tick.
-  const lostSecondsRef = useRef<number[]>([])
-
-  const recomputeCombinedMarkers = (u: uPlot): void => {
-    const { min: xMin, max: xMax } = u.scales.x
-    const { left, top } = plotOffsetCss(u)
-    const next = combinedAnomaliesRef.current
-      .filter(
-        (a) => xMin == null || xMax == null || (a.timestampSec >= xMin && a.timestampSec <= xMax)
-      )
-      .map((a) => ({
-        key: anomalyMarkerKey(a.targetId, a.index),
-        left: left + u.valToPos(a.timestampSec, 'x', false),
-        top: top + ANOMALY_RAIL_OFFSET,
-        targetLabel: labelByTargetIdRef.current.get(a.targetId) ?? a.targetId,
-        timestampSec: a.timestampSec,
-        lossPercent: a.lossPercent,
-        othersAvgLossPercent: a.othersAvgLossPercent,
-        latencyMs: a.latencyMs
-      }))
-    setCombinedMarkers(next)
-  }
-
   // Ignores stale entries for targets that got unchecked since - no
   // explicit cleanup needed when a chart unmounts.
   const anyIndividualZoomed = visibleTargets.some((target) => zoomedTargetIds.has(target.id))
@@ -392,6 +356,7 @@ function OverviewChart({
     const { width, height } = container.getBoundingClientRect()
     const initialData: uPlot.AlignedData = [
       [],
+      ...visibleTargets.map(() => []),
       ...visibleTargets.map(() => [])
     ] as uPlot.AlignedData
     const plot = new uPlot(
@@ -403,10 +368,7 @@ function OverviewChart({
           const fullSpanSec = rangeMsRef.current / 1000
           setIsCombinedZoomed(max - min < fullSpanSec - 1)
         },
-        (u) => {
-          recomputeCombinedMarkers(u)
-          drawLossMarkers(u, lostSecondsRef.current)
-        }
+        (u) => drawLossMarkers(u, lostSecondsRef.current)
       ),
       initialData,
       container
@@ -432,7 +394,6 @@ function OverviewChart({
       plot.destroy()
       plotRef.current = null
       setIsCombinedZoomed(false)
-      setCombinedMarkers([])
     }
     // Deliberately keyed on targetsKey, not `visibleTargets` itself - see above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -445,6 +406,11 @@ function OverviewChart({
   useEffect(() => {
     isCombinedZoomedRef.current = isCombinedZoomed
   }, [isCombinedZoomed])
+
+  // Read inside the combined chart's `draw` hook, which closes over the plot
+  // instance created once on mount - a ref keeps it seeing the latest set of
+  // lost-ping timestamps without recreating the plot on every data tick.
+  const lostSecondsRef = useRef<number[]>([])
 
   const fitToRange = (): void => {
     const plot = plotRef.current
@@ -468,6 +434,7 @@ function OverviewChart({
 
     const chartXs = historyData ? historyData.xs : xs
     const chartSeriesLatency = historyData ? historyData.series : series.map((s) => s.latency)
+    const chartSeriesLoss = historyData ? historyData.lossPercent : series.map((s) => s.lossPercent)
     lostSecondsRef.current = historyData
       ? historyData.lostSeconds
       : chartXs.filter((_, index) => chartSeriesLatency.some((latency) => latency[index] === null))
@@ -477,13 +444,12 @@ function OverviewChart({
     // canvas simply never repaints on a plain data tick, and the picture
     // only updates in one big jump whenever some unrelated layout reflow
     // happens to fire the ResizeObserver above.
-    plot.setData([chartXs, ...chartSeriesLatency], false)
+    plot.setData([chartXs, ...chartSeriesLatency, ...chartSeriesLoss], false)
     if (isCombinedZoomedRef.current) {
       // A manual drag-zoom is active - redraw() (rebuildPaths defaults true)
       // reapplies the plot's CURRENT x-scale bounds, preserving that zoom
       // instead of re-fitting to the full data range, while still forcing
-      // the repaint (which in turn fires the `draw` hook that recomputes
-      // marker positions).
+      // the repaint.
       plot.redraw()
     } else {
       // Unzoomed: the live-mode bucket window above is a rolling
@@ -589,7 +555,6 @@ function OverviewChart({
                 ref={containerRef}
                 className={`timeline-chart overview-chart ${isCombinedZoomed ? 'timeline-chart--zoomed' : ''}`}
               />
-              <ChartAnomalyOverlay markers={combinedMarkers} />
             </div>
           )}
         </section>
@@ -647,7 +612,6 @@ function OverviewChart({
                   resetSignal={resetToken}
                   onZoomChange={handleIndividualZoomChange}
                   syncedRange={syncedRange}
-                  anomalies={anomaliesByTarget.get(target.id) ?? []}
                 />
               </section>
             ))
