@@ -1,5 +1,8 @@
-import type { HopSample, NetworkUpdate } from '../../../shared/types'
+import type { HopRecord, HopSample, NetworkUpdate } from '../../../shared/types'
 
+// Matches `hop-history.ts`'s `DEFAULT_MAX_RUNS` on the main-process side, so
+// a live-buffer view and a DB-range view (see `collectRunsFromHopRecords`)
+// retain the same number of runs.
 const MAX_RUNS = 20
 
 export interface TraceRun {
@@ -14,6 +17,13 @@ export interface TraceRun {
  * `hopsCapturedAt` marks a new run. Shared by `buildRouteTable` (aggregate
  * stats + per-hop trend) and `buildPathGraph` (branch/merge topology) so
  * both work off the exact same run history.
+ *
+ * Only covers whatever's still in the live buffer (the last couple of
+ * hours) - a caller showing an explicit, possibly older timeframe (e.g. a
+ * 24h/7d preset, or a drag-zoom) instead fetches durable rows from
+ * `HopHistory` via `getHopHistoryRange` and converts them with
+ * `collectRunsFromHopRecords` below - both produce the same `TraceRun[]`
+ * shape so `buildRouteTable`/`buildPathGraph` don't need to care which one fed them.
  */
 export function collectRuns(updates: NetworkUpdate[], maxRuns: number = MAX_RUNS): TraceRun[] {
   const runsByCapturedAt = new Map<number, HopSample[]>()
@@ -28,6 +38,33 @@ export function collectRuns(updates: NetworkUpdate[], maxRuns: number = MAX_RUNS
   return capturedAts
     .slice(-maxRuns)
     .map((capturedAt) => ({ capturedAt, hops: runsByCapturedAt.get(capturedAt)! }))
+}
+
+/**
+ * Groups flat `HopHistory` rows (as returned by `getHopHistoryRange`) back
+ * into one `TraceRun` per `traceId` - the DB-range counterpart of
+ * `collectRuns` above, for showing the path as it was during an explicit,
+ * possibly historical timeframe rather than whatever's in the live buffer.
+ */
+export function collectRunsFromHopRecords(records: HopRecord[]): TraceRun[] {
+  const runsByTraceId = new Map<string, TraceRun>()
+
+  for (const record of records) {
+    const hop: HopSample = {
+      hopNumber: record.hopNumber,
+      address: record.address,
+      hostname: record.hostname,
+      latencyMs: record.latencyMs
+    }
+    const run = runsByTraceId.get(record.traceId)
+    if (run) {
+      run.hops.push(hop)
+    } else {
+      runsByTraceId.set(record.traceId, { capturedAt: record.capturedAt.getTime(), hops: [hop] })
+    }
+  }
+
+  return Array.from(runsByTraceId.values()).sort((a, b) => a.capturedAt - b.capturedAt)
 }
 
 export interface RouteRow {
@@ -51,14 +88,11 @@ export interface RouteTable {
 }
 
 /**
- * Aggregates the last few completed traceroute runs (see `collectRuns`) into
- * one row per hop number with a per-hop loss percentage across those runs -
- * the same idea as MTR/WinMTR, computed entirely client-side from the IPC
- * stream.
+ * Aggregates a set of completed traceroute runs (see `collectRuns`/
+ * `collectRunsFromHopRecords`) into one row per hop number with a per-hop
+ * loss percentage across those runs - the same idea as MTR/WinMTR.
  */
-export function buildRouteTable(updates: NetworkUpdate[]): RouteTable {
-  const runs = collectRuns(updates)
-
+export function buildRouteTable(runs: TraceRun[]): RouteTable {
   if (runs.length === 0) {
     return { rows: [], runCount: 0, latestCapturedAt: null }
   }

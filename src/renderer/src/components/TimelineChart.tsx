@@ -5,11 +5,27 @@ import type { NetworkUpdate, PingHistoryRecord } from '../../../shared/types'
 import { buildChartSeries, TIMELINE_RANGE_PRESETS } from '../lib/chart-data'
 import { buildPingHistorySeries } from '../lib/ping-history-chart'
 import { drawLossMarkers } from '../lib/chart-loss-markers'
+import { formatLegendTimestamp } from '../lib/chart-legend'
 import TimeRangeControls from './TimeRangeControls'
+
+/** An explicit, bounded timeframe the chart is currently showing - `null` means "the live default" (unzoomed, short preset). */
+export interface VisibleTimeRange {
+  fromMs: number
+  toMs: number
+}
 
 interface TimelineChartProps {
   targetId: string
   updates: NetworkUpdate[]
+  /**
+   * Reports the timeframe the Network Path/Route Table below should show
+   * hops for - `null` while unzoomed on a short live preset (those views
+   * fall back to the live buffer's own latest runs), and a concrete
+   * `{fromMs, toMs}` once a history preset (24h/7d/30d) or a manual
+   * drag-zoom pins down an explicit window, so the path shown matches
+   * whatever timeframe is actually selected here.
+   */
+  onExplicitRangeChange?: (range: VisibleTimeRange | null) => void
 }
 
 const COLOR_LATENCY = '#4f8cff'
@@ -52,13 +68,16 @@ function buildOptions(
       }
     ],
     series: [
-      {},
+      { value: formatLegendTimestamp },
       {
         label: 'Latency',
         scale: 'y',
         stroke: COLOR_LATENCY,
         width: 2,
-        spanGaps: false,
+        // Spanning gaps (rather than breaking the line at a lost/null
+        // sample) means the line runs right up to a loss marker instead of
+        // leaving a blank sliver on either side of it - see `drawLossMarkers`.
+        spanGaps: true,
         points: { show: false }
       }
     ],
@@ -104,13 +123,23 @@ function buildOptions(
  * harder-to-miss signal than a smoothed percentage line, especially for an
  * isolated single lost ping.
  */
-function TimelineChart({ targetId, updates }: TimelineChartProps): React.JSX.Element {
+function TimelineChart({
+  targetId,
+  updates,
+  onExplicitRangeChange
+}: TimelineChartProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const plotRef = useRef<uPlot | null>(null)
   const [rangeMs, setRangeMs] = useState(TIMELINE_RANGE_PRESETS[0].ms)
   const [isZoomed, setIsZoomed] = useState(false)
   const [historyRecords, setHistoryRecords] = useState<PingHistoryRecord[]>([])
   const [historyError, setHistoryError] = useState<string | null>(null)
+
+  // The plot's current visible x-scale bounds (seconds) - updated
+  // synchronously from the setScale hook below, alongside `isZoomed`, so the
+  // explicit-range effect further down always reads the bounds that go with
+  // whatever `isZoomed`/`selectedPreset` it's reacting to.
+  const visibleBoundsRef = useRef<{ min: number; max: number } | null>(null)
 
   const selectedPreset = useMemo(
     () =>
@@ -141,6 +170,7 @@ function TimelineChart({ targetId, updates }: TimelineChartProps): React.JSX.Ele
         Math.max(width, 1),
         Math.max(height, 1),
         (min, max) => {
+          visibleBoundsRef.current = { min, max }
           // A manual drag-zoom shrinks the visible span below the selected
           // preset's full width - that's the only way `isZoomed` flips true,
           // so an explicit fitToRange() (which restores the full span) always
@@ -185,6 +215,28 @@ function TimelineChart({ targetId, updates }: TimelineChartProps): React.JSX.Ele
     isZoomedRef.current = isZoomed
   }, [isZoomed])
 
+  // Reports the explicit timeframe (see `onExplicitRangeChange`'s doc
+  // comment) whenever the preset or zoom state changes - deliberately NOT
+  // keyed on every live-mode tick (which also nudges the plot's bounds
+  // forward every ~1s via `fitToRange`), so a live, unzoomed short preset
+  // doesn't cause a DB fetch every second in the parent.
+  useEffect(() => {
+    if (!onExplicitRangeChange) return
+    const bounds = visibleBoundsRef.current
+    if (selectedPreset.source === 'history') {
+      onExplicitRangeChange(
+        bounds
+          ? { fromMs: bounds.min * 1000, toMs: bounds.max * 1000 }
+          : { fromMs: Date.now() - rangeMs, toMs: Date.now() }
+      )
+    } else if (isZoomed && bounds) {
+      onExplicitRangeChange({ fromMs: bounds.min * 1000, toMs: bounds.max * 1000 })
+    } else {
+      onExplicitRangeChange(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPreset, isZoomed])
+
   const fitToRange = (): void => {
     const plot = plotRef.current
     if (!plot) return
@@ -213,6 +265,16 @@ function TimelineChart({ targetId, updates }: TimelineChartProps): React.JSX.Ele
             setHistoryError(error instanceof Error ? error.message : 'Failed to load ping history')
           }
         })
+      // Keeps the reported explicit range creeping forward with "now" on
+      // the same cadence as the rollup refetch above, so the Network
+      // Path/Route Table stay current for an unzoomed history preset
+      // instead of freezing at whatever moment it was first selected. A
+      // manual drag-zoom (isZoomedRef true) pins an explicit sub-window on
+      // purpose, so it's left alone here - the dedicated effect above
+      // already reported it once when the zoom was made.
+      if (onExplicitRangeChange && !isZoomedRef.current) {
+        onExplicitRangeChange({ fromMs: from.getTime(), toMs: to.getTime() })
+      }
     }
 
     load()
@@ -221,6 +283,9 @@ function TimelineChart({ targetId, updates }: TimelineChartProps): React.JSX.Ele
       cancelled = true
       clearInterval(interval)
     }
+    // onExplicitRangeChange is a stable setState-style callback from the
+    // parent, and isZoomedRef is a ref - neither needs to be a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetId, selectedPreset])
 
   useEffect(() => {

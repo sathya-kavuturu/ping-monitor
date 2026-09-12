@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { buildRouteTable, hopStatus, type RouteRow } from '../src/renderer/src/lib/route-table'
+import {
+  buildRouteTable,
+  collectRuns,
+  hopStatus,
+  type RouteRow,
+  type TraceRun
+} from '../src/renderer/src/lib/route-table'
 import type { HopSample, NetworkUpdate } from '../src/shared/types'
+
+function run(capturedAt: number, hops: HopSample[]): TraceRun {
+  return { capturedAt, hops }
+}
 
 function update(hopsCapturedAt: number | null, hops: HopSample[]): NetworkUpdate {
   return {
@@ -20,9 +30,9 @@ describe('buildRouteTable', () => {
 
   it('collapses repeated samples of the same run into a single run', () => {
     const hops: HopSample[] = [{ hopNumber: 1, address: '10.0.0.1', hostname: null, latencyMs: 5 }]
-    const updates = [update(100, hops), update(100, hops), update(100, hops)]
+    const runs = collectRuns([update(100, hops), update(100, hops), update(100, hops)])
 
-    const table = buildRouteTable(updates)
+    const table = buildRouteTable(runs)
     expect(table.runCount).toBe(1)
     expect(table.latestCapturedAt).toBe(100)
   })
@@ -33,7 +43,7 @@ describe('buildRouteTable', () => {
     ]
     const silent: HopSample[] = [{ hopNumber: 1, address: null, hostname: null, latencyMs: null }]
 
-    const table = buildRouteTable([update(100, replied), update(200, silent)])
+    const table = buildRouteTable([run(100, replied), run(200, silent)])
 
     expect(table.runCount).toBe(2)
     expect(table.rows).toEqual([
@@ -47,15 +57,23 @@ describe('buildRouteTable', () => {
       }
     ])
   })
+})
+
+describe('collectRuns', () => {
+  it('collapses repeated samples sharing the same hopsCapturedAt into one run', () => {
+    const hops: HopSample[] = [{ hopNumber: 1, address: '10.0.0.1', hostname: null, latencyMs: 5 }]
+    const runs = collectRuns([update(100, hops), update(100, hops), update(100, hops)])
+    expect(runs).toEqual([{ capturedAt: 100, hops }])
+  })
 
   it('keeps only the most recent 20 runs', () => {
     const updates = Array.from({ length: 25 }, (_, i) =>
       update(i, [{ hopNumber: 1, address: `10.0.0.${i}`, hostname: null, latencyMs: 1 }])
     )
 
-    const table = buildRouteTable(updates)
-    expect(table.runCount).toBe(20)
-    expect(table.latestCapturedAt).toBe(24)
+    const runs = collectRuns(updates)
+    expect(runs).toHaveLength(20)
+    expect(runs[runs.length - 1].capturedAt).toBe(24)
   })
 })
 

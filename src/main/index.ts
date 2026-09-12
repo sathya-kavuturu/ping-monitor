@@ -6,6 +6,7 @@ import type {
   CreateAlertRuleInput,
   CreateTargetInput,
   HopHistoryQuery,
+  HopHistoryRangeQuery,
   NetworkUpdate,
   PingHistoryQuery,
   UpdateTargetInput
@@ -29,7 +30,7 @@ import {
   updateTarget
 } from './db/targets'
 import { savePingRollup, getPingHistory, type RawPingSample } from './db/ping-history'
-import { saveHopHistory, getHopHistory } from './db/hop-history'
+import { saveHopHistory, getHopHistory, getHopHistoryRange } from './db/hop-history'
 import { getDbStorageStats } from './db/storage-stats'
 import {
   clearImportedDatabase,
@@ -305,6 +306,11 @@ function registerIpcHandlers(): void {
   ipcMain.handle(IpcChannels.HopHistoryList, async (event, query: HopHistoryQuery) => {
     assertTrustedSender(event.senderFrame)
     return getHopHistory(query)
+  })
+
+  ipcMain.handle(IpcChannels.HopHistoryRangeList, async (event, query: HopHistoryRangeQuery) => {
+    assertTrustedSender(event.senderFrame)
+    return getHopHistoryRange(query)
   })
 
   ipcMain.handle(IpcChannels.DbStorageStats, async (event) => {

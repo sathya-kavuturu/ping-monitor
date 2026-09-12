@@ -1,5 +1,4 @@
-import type { NetworkUpdate } from '../../../shared/types'
-import { collectRuns } from './route-table'
+import type { TraceRun } from './route-table'
 
 /** Sentinel hop number for "this device" - the vantage point every run starts from. */
 export const YOU_HOP_NUMBER = 0
@@ -50,10 +49,13 @@ function nodeKey(hopNumber: number, address: string | null): string {
  * shows them re-converging wherever the runs agree again - the same shape
  * ThousandEyes' multi-path view draws, derived here purely from repeated
  * single-vantage-point traceroutes rather than multiple agents.
+ *
+ * Takes pre-collected runs (see `collectRuns`/`collectRunsFromHopRecords` in
+ * `route-table.ts`) rather than a raw update/record list, so it works the
+ * same way whether the runs came from the live buffer or a DB-backed
+ * timeframe query.
  */
-export function buildPathGraph(updates: NetworkUpdate[]): PathGraph {
-  const runs = collectRuns(updates)
-
+export function buildPathGraph(runs: TraceRun[]): PathGraph {
   if (runs.length === 0) {
     return { columns: [], edges: [], runCount: 0, latestCapturedAt: null }
   }

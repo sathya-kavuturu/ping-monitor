@@ -1,20 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { buildPathGraph, YOU_HOP_NUMBER } from '../src/renderer/src/lib/path-graph'
-import type { HopSample, NetworkUpdate } from '../src/shared/types'
+import type { TraceRun } from '../src/renderer/src/lib/route-table'
+import type { HopSample } from '../src/shared/types'
 
 function hop(hopNumber: number, address: string): HopSample {
   return { hopNumber, address, hostname: null, latencyMs: 10 }
 }
 
-function update(capturedAt: number, hops: HopSample[]): NetworkUpdate {
-  return {
-    targetId: 't1',
-    timestamp: capturedAt,
-    latencyMs: 10,
-    status: 'online',
-    hops,
-    hopsCapturedAt: capturedAt
-  }
+function run(capturedAt: number, hops: HopSample[]): TraceRun {
+  return { capturedAt, hops }
 }
 
 describe('buildPathGraph', () => {
@@ -29,8 +23,8 @@ describe('buildPathGraph', () => {
 
   it('builds a single-column-per-hop chain when every run agrees', () => {
     const graph = buildPathGraph([
-      update(100, [hop(1, '10.0.0.1'), hop(2, '10.0.0.2')]),
-      update(200, [hop(1, '10.0.0.1'), hop(2, '10.0.0.2')])
+      run(100, [hop(1, '10.0.0.1'), hop(2, '10.0.0.2')]),
+      run(200, [hop(1, '10.0.0.1'), hop(2, '10.0.0.2')])
     ])
 
     expect(graph.columns.map((c) => c.nodes.length)).toEqual([1, 1])
@@ -45,9 +39,9 @@ describe('buildPathGraph', () => {
 
   it('splits a hop into branches when runs disagree, and reports per-branch run counts', () => {
     const graph = buildPathGraph([
-      update(100, [hop(1, '10.0.0.1'), hop(2, '10.0.0.2')]),
-      update(200, [hop(1, '10.0.0.1'), hop(2, '10.0.0.9')]),
-      update(300, [hop(1, '10.0.0.1'), hop(2, '10.0.0.2')])
+      run(100, [hop(1, '10.0.0.1'), hop(2, '10.0.0.2')]),
+      run(200, [hop(1, '10.0.0.1'), hop(2, '10.0.0.9')]),
+      run(300, [hop(1, '10.0.0.1'), hop(2, '10.0.0.2')])
     ])
 
     expect(graph.columns[0].nodes).toHaveLength(1)
@@ -62,8 +56,8 @@ describe('buildPathGraph', () => {
 
   it('re-merges branches back into a single node at the next hop', () => {
     const graph = buildPathGraph([
-      update(100, [hop(1, 'A'), hop(2, 'B1'), hop(3, 'C')]),
-      update(200, [hop(1, 'A'), hop(2, 'B2'), hop(3, 'C')])
+      run(100, [hop(1, 'A'), hop(2, 'B1'), hop(3, 'C')]),
+      run(200, [hop(1, 'A'), hop(2, 'B2'), hop(3, 'C')])
     ])
 
     expect(graph.columns[1].nodes).toHaveLength(2) // B1, B2
@@ -76,7 +70,7 @@ describe('buildPathGraph', () => {
   })
 
   it('starts every run from a shared "You" node', () => {
-    const graph = buildPathGraph([update(100, [hop(1, 'A')]), update(200, [hop(1, 'A')])])
+    const graph = buildPathGraph([run(100, [hop(1, 'A')]), run(200, [hop(1, 'A')])])
     const youKey = `${YOU_HOP_NUMBER}:silent`
     const fromYou = graph.edges.filter((e) => e.fromKey === youKey)
     expect(fromYou).toHaveLength(1)
@@ -85,8 +79,8 @@ describe('buildPathGraph', () => {
 
   it('treats a silent (no-reply) hop as its own node distinct from a real address', () => {
     const graph = buildPathGraph([
-      update(100, [hop(1, 'A'), { hopNumber: 2, address: null, hostname: null, latencyMs: null }]),
-      update(200, [hop(1, 'A'), hop(2, 'B')])
+      run(100, [hop(1, 'A'), { hopNumber: 2, address: null, hostname: null, latencyMs: null }]),
+      run(200, [hop(1, 'A'), hop(2, 'B')])
     ])
 
     expect(graph.columns[1].nodes).toHaveLength(2)

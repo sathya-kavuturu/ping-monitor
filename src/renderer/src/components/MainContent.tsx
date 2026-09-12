@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { NetworkUpdate } from '../../../shared/types'
+import type { HopRecord, NetworkUpdate } from '../../../shared/types'
 import type { TargetWithStatus } from '../App'
 import { useHopHosting } from '../lib/use-hop-hosting'
-import TimelineChart from './TimelineChart'
+import { collectRuns, collectRunsFromHopRecords, type TraceRun } from '../lib/route-table'
+import TimelineChart, { type VisibleTimeRange } from './TimelineChart'
 import PathVisualization from './PathVisualization'
 import RouteTable from './RouteTable'
 
@@ -47,21 +48,73 @@ function MainContent({ target, liveUpdates }: MainContentProps): React.JSX.Eleme
 
   const showResolvedIp = resolvedIp !== null && target !== null && resolvedIp !== target.host
 
+  // `null` = show whatever the live buffer's latest traceroute runs are (the
+  // long-standing default). Non-null pins the Network Path/Route Table to an
+  // explicit timeframe - set by `TimelineChart` whenever a history preset
+  // (24h/7d/30d) or a manual drag-zoom is active, so those views track
+  // whatever timeframe is actually selected on the latency graph above them.
+  const [explicitRange, setExplicitRange] = useState<VisibleTimeRange | null>(null)
+  const [rangeHopRecords, setRangeHopRecords] = useState<HopRecord[]>([])
+  const [rangeError, setRangeError] = useState<string | null>(null)
+  const targetId = target?.id ?? null
+
+  // A target switch invalidates any in-flight/previous range immediately,
+  // rather than briefly showing the new target's live buffer under the old
+  // target's stale explicit range (or vice versa) until `TimelineChart`
+  // remounts and reports its own default.
+  useEffect(() => {
+    setExplicitRange(null)
+    setRangeHopRecords([])
+    setRangeError(null)
+  }, [targetId])
+
+  useEffect(() => {
+    if (!targetId || !explicitRange) return
+    let cancelled = false
+    window.api
+      .getHopHistoryRange({
+        targetId,
+        from: new Date(explicitRange.fromMs),
+        to: new Date(explicitRange.toMs)
+      })
+      .then((records) => {
+        if (!cancelled) setRangeHopRecords(records)
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setRangeError(error instanceof Error ? error.message : 'Failed to load path history')
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [targetId, explicitRange])
+
+  // The actual run set both `PathVisualization` and `RouteTable` render -
+  // either the live buffer's latest runs, or the explicit-timeframe runs
+  // just fetched above. Both `collectRuns` and `collectRunsFromHopRecords`
+  // produce the same `TraceRun[]` shape (see `route-table.ts`), so neither
+  // downstream component needs to know which source fed it.
+  const runs = useMemo<TraceRun[]>(
+    () => (explicitRange ? collectRunsFromHopRecords(rangeHopRecords) : collectRuns(liveUpdates)),
+    [explicitRange, rangeHopRecords, liveUpdates]
+  )
+
   // Shared across `PathVisualization` and `RouteTable` (both derived from
-  // the same `liveUpdates`) so a given hop address is only ever looked up
-  // once - see `useHopHosting`. Stabilized through a joined-string key
-  // (same trick as `targetsKey` in `OverviewChart`) so the ~1s tick that
-  // gives `liveUpdates` a new array identity doesn't also give the address
-  // list a new identity when the actual set of addresses hasn't changed.
+  // the same `runs`) so a given hop address is only ever looked up once -
+  // see `useHopHosting`. Stabilized through a joined-string key (same trick
+  // as `targetsKey` in `OverviewChart`) so a tick that gives `runs` a new
+  // array identity doesn't also give the address list a new identity when
+  // the actual set of addresses hasn't changed.
   const hopAddressesKey = useMemo(() => {
     const set = new Set<string>()
-    for (const update of liveUpdates) {
-      for (const hop of update.hops) {
+    for (const run of runs) {
+      for (const hop of run.hops) {
         if (hop.address) set.add(hop.address)
       }
     }
     return Array.from(set).sort().join(',')
-  }, [liveUpdates])
+  }, [runs])
   const hopAddresses = useMemo(
     () => (hopAddressesKey ? hopAddressesKey.split(',') : []),
     [hopAddressesKey]
@@ -99,20 +152,23 @@ function MainContent({ target, liveUpdates }: MainContentProps): React.JSX.Eleme
             </div>
           </section>
 
-          <TimelineChart key={`timeline-${target.id}`} targetId={target.id} updates={liveUpdates} />
+          <TimelineChart
+            key={`timeline-${target.id}`}
+            targetId={target.id}
+            updates={liveUpdates}
+            onExplicitRangeChange={setExplicitRange}
+          />
+
+          {rangeError && <p className="sidebar-error">{rangeError}</p>}
 
           <PathVisualization
             key={`path-${target.id}`}
-            updates={liveUpdates}
+            runs={runs}
             targetName={target.name}
             hostingByAddress={hostingByAddress}
           />
 
-          <RouteTable
-            key={`route-${target.id}`}
-            updates={liveUpdates}
-            hostingByAddress={hostingByAddress}
-          />
+          <RouteTable key={`route-${target.id}`} runs={runs} hostingByAddress={hostingByAddress} />
         </>
       )}
     </main>

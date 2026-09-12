@@ -5,6 +5,7 @@ import { buildOverviewChartData } from '../lib/overview-chart'
 import { buildPingHistorySeries } from '../lib/ping-history-chart'
 import { TIMELINE_RANGE_PRESETS } from '../lib/chart-data'
 import { drawLossMarkers } from '../lib/chart-loss-markers'
+import { formatLegendTimestamp } from '../lib/chart-legend'
 import type { PacketLossAnomaly } from '../lib/packet-loss-anomaly'
 import { plotOffsetCss } from '../lib/uplot-position'
 import ChartAnomalyOverlay, { type AnomalyMarker } from './ChartAnomalyOverlay'
@@ -72,7 +73,12 @@ function buildOptions(
         ticks: { stroke: COLOR_GRID }
       }
     ],
-    series: [{}, { label, stroke: color, width: 2, spanGaps: false, points: { show: false } }],
+    series: [
+      { value: formatLegendTimestamp },
+      // spanGaps: runs the line right up to a loss marker instead of leaving
+      // a blank sliver on either side of it - see `drawLossMarkers`.
+      { label, stroke: color, width: 2, spanGaps: true, points: { show: false } }
+    ],
     legend: { show: true },
     cursor: { drag: { x: true, y: false } },
     hooks: {

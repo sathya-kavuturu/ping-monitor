@@ -113,7 +113,7 @@ function DbStorageView({ onImported }: DbStorageViewProps): React.JSX.Element {
 
       {error && <p className="sidebar-error">{error}</p>}
 
-      <section className="feed">
+      <section className="feed" style={{ marginBottom: 24 }}>
         <div className="feed-header-row">
           <h2>Export &amp; import</h2>
         </div>

@@ -1,10 +1,11 @@
 import { useMemo } from 'react'
-import type { HopHostingInfo, NetworkUpdate } from '../../../shared/types'
-import { buildRouteTable } from '../lib/route-table'
+import type { HopHostingInfo } from '../../../shared/types'
+import { buildRouteTable, type TraceRun } from '../lib/route-table'
 import Sparkline from './Sparkline'
 
 interface RouteTableProps {
-  updates: NetworkUpdate[]
+  /** Pre-collected runs from either the live buffer or a DB-backed timeframe query - see `MainContent`. */
+  runs: TraceRun[]
   /** Hosting/ISP info per hop address - see `useHopHosting` (owned by `MainContent`, shared with `PathVisualization`). */
   hostingByAddress: Map<string, HopHostingInfo | null>
 }
@@ -25,8 +26,8 @@ function formatAge(capturedAt: number | null): string {
  * whether a hop is reliably answering, not just its single latest reply.
  * Driven entirely by the live `network:update` stream - no DB round trip.
  */
-function RouteTable({ updates, hostingByAddress }: RouteTableProps): React.JSX.Element {
-  const { rows, runCount, latestCapturedAt } = useMemo(() => buildRouteTable(updates), [updates])
+function RouteTable({ runs, hostingByAddress }: RouteTableProps): React.JSX.Element {
+  const { rows, runCount, latestCapturedAt } = useMemo(() => buildRouteTable(runs), [runs])
 
   return (
     <section className="feed">

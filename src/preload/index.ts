@@ -29,6 +29,8 @@ const api: ExposedApi = {
 
   getHopHistory: (query) => ipcRenderer.invoke(IpcChannels.HopHistoryList, query),
 
+  getHopHistoryRange: (query) => ipcRenderer.invoke(IpcChannels.HopHistoryRangeList, query),
+
   getDbStorageStats: () => ipcRenderer.invoke(IpcChannels.DbStorageStats),
 
   exportDatabase: () => ipcRenderer.invoke(IpcChannels.DbExport),

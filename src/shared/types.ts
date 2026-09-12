@@ -91,6 +91,15 @@ export interface HopHistoryQuery {
   limit?: number
 }
 
+/** Fetches every hop of the most recent completed traceroute runs captured within `[from, to]` - see `getHopHistoryRange`. */
+export interface HopHistoryRangeQuery {
+  targetId: string
+  from: Date
+  to: Date
+  /** Caps how many runs within the range are returned (most recent first). Defaults to 20. */
+  maxRuns?: number
+}
+
 /** One DB table's current row count and on-disk byte usage (see `getDbStorageStats`). */
 export interface DbTableStats {
   table: string
@@ -204,6 +213,8 @@ export interface ExposedApi {
   resolveHopHosting: (address: string) => Promise<HopHostingInfo | null>
   getPingHistory: (query: PingHistoryQuery) => Promise<PingHistoryRecord[]>
   getHopHistory: (query: HopHistoryQuery) => Promise<HopRecord[]>
+  /** The Network Path/Route Table equivalent of `getPingHistory`'s time-range queries - see `HopHistoryRangeQuery`. */
+  getHopHistoryRange: (query: HopHistoryRangeQuery) => Promise<HopRecord[]>
   getDbStorageStats: () => Promise<DbStorageStats>
   /** Opens a save dialog and writes a full copy of the live database there. */
   exportDatabase: () => Promise<ExportDatabaseResult>

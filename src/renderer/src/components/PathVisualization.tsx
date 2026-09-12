@@ -1,9 +1,11 @@
 import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
-import type { HopHostingInfo, NetworkUpdate } from '../../../shared/types'
+import type { HopHostingInfo } from '../../../shared/types'
 import { buildPathGraph, YOU_HOP_NUMBER, type PathEdge, type PathNode } from '../lib/path-graph'
+import type { TraceRun } from '../lib/route-table'
 
 interface PathVisualizationProps {
-  updates: NetworkUpdate[]
+  /** Pre-collected runs from either the live buffer or a DB-backed timeframe query - see `MainContent`. */
+  runs: TraceRun[]
   targetName: string
   /** Hosting/ISP info per hop address - see `useHopHosting` (owned by `MainContent`, shared with `RouteTable`). */
   hostingByAddress: Map<string, HopHostingInfo | null>
@@ -43,7 +45,11 @@ function nodeStatus(node: PathNode): NodeStatus {
 
 function nodeLabel(node: PathNode, isLast: boolean, targetName: string): string {
   if (node.hopNumber === YOU_HOP_NUMBER) return 'You'
-  return isLast ? targetName : `Hop ${node.hopNumber}`
+  if (isLast) return targetName
+  // Prefer the reverse-DNS hostname (e.g. "ae12.core1.lon.example.net") over
+  // a bare "Hop N" label - falls back to the hop number for a hop that
+  // never replied, or one whose PTR lookup found nothing.
+  return node.hostname ?? `Hop ${node.hopNumber}`
 }
 
 function statusText(status: NodeStatus): string {
@@ -94,11 +100,11 @@ function youNode(totalRuns: number): PathNode {
  * positioning escapes that entirely since it's relative to the viewport.
  */
 function PathVisualization({
-  updates,
+  runs,
   targetName,
   hostingByAddress
 }: PathVisualizationProps): React.JSX.Element {
-  const graph = useMemo(() => buildPathGraph(updates), [updates])
+  const graph = useMemo(() => buildPathGraph(runs), [runs])
   const you = useMemo(() => youNode(graph.runCount), [graph.runCount])
 
   const containerRef = useRef<HTMLDivElement>(null)

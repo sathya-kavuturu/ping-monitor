@@ -7,6 +7,7 @@ import { buildOverviewChartData } from '../lib/overview-chart'
 import { buildOverviewHistoryData } from '../lib/overview-history-chart'
 import { TIMELINE_RANGE_PRESETS } from '../lib/chart-data'
 import { drawLossMarkers } from '../lib/chart-loss-markers'
+import { formatLegendTimestamp } from '../lib/chart-legend'
 import { detectPacketLossAnomalies, type PacketLossAnomaly } from '../lib/packet-loss-anomaly'
 import { plotOffsetCss } from '../lib/uplot-position'
 import TimeRangeControls from './TimeRangeControls'
@@ -80,12 +81,14 @@ function buildOptions(
       }
     ],
     series: [
-      {},
+      { value: formatLegendTimestamp },
+      // spanGaps: runs each line right up to a loss marker instead of
+      // leaving a blank sliver on either side of it - see `drawLossMarkers`.
       ...labels.map((label, index) => ({
         label,
         stroke: colorFor(index),
         width: 2,
-        spanGaps: false,
+        spanGaps: true,
         points: { show: false }
       }))
     ],
