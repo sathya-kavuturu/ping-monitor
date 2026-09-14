@@ -146,7 +146,7 @@ function OverviewChart({
   const plotRef = useRef<uPlot | null>(null)
   const mainRef = useRef<HTMLElement>(null)
   const [rangeMs, setRangeMs] = useState(TIMELINE_RANGE_PRESETS[0].ms)
-  const [viewMode, setViewMode] = useState<ViewMode>('combined')
+  const [viewMode, setViewMode] = useState<ViewMode>('individual')
   // Individual view only: zooms the whole page out just enough that every
   // visible target's chart fits without scrolling - see the effect below
   // for how the needed factor is computed.
