@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import type { HopHostingInfo } from '../../../shared/types'
+import { isPrivateOrReservedIp } from '../../../shared/ip-utils'
 import { buildPathGraph, YOU_HOP_NUMBER, type PathEdge, type PathNode } from '../lib/path-graph'
 import type { TraceRun } from '../lib/route-table'
 
@@ -51,13 +52,15 @@ function nodeLabel(
 ): string {
   if (node.hopNumber === YOU_HOP_NUMBER) return 'You'
   if (isLast) return targetName
-  const hosting = node.address ? hostingByAddress.get(node.address) : null
+  if (node.address === null) return 'No reply'
+  if (isPrivateOrReservedIp(node.address)) return 'Your Network'
+  const hosting = hostingByAddress.get(node.address)
   // Prefer the hop's hosting/network org name (e.g. "Google LLC", "Comcast
   // Cable Communications") over a raw reverse-DNS hostname - it says WHO
   // operates that hop at a glance, which a PTR record's hostname usually
   // doesn't make obvious. Falls back to the hostname, then the bare hop
-  // number, for whichever of those isn't available (or never will be, for
-  // a silent hop).
+  // number, only while the lookup for a real public address is still
+  // pending or came back empty.
   return hosting?.org ?? hosting?.isp ?? node.hostname ?? `Hop ${node.hopNumber}`
 }
 

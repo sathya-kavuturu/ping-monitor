@@ -1,5 +1,6 @@
 import http from 'http'
 import type { HopHostingInfo } from '../../shared/types'
+import { isPrivateOrReservedIp } from '../../shared/ip-utils'
 
 // ip-api.com's free tier is HTTP-only (HTTPS requires a paid plan) and
 // keyless - fine for looking up router hops, which are public IPs to begin
@@ -25,20 +26,6 @@ const inFlight = new Map<string, Promise<HopHostingInfo | null>>()
 // all in parallel) so concurrent callers still get paced by MIN_REQUEST_SPACING_MS.
 let queue: Promise<void> = Promise.resolve()
 let lastRequestAt = 0
-
-function isPrivateOrReservedIp(address: string): boolean {
-  return (
-    /^10\./.test(address) ||
-    /^127\./.test(address) ||
-    /^192\.168\./.test(address) ||
-    /^169\.254\./.test(address) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(address) ||
-    address === '::1' ||
-    address.startsWith('fe80:') ||
-    address.startsWith('fc') ||
-    address.startsWith('fd')
-  )
-}
 
 function fetchHostingInfo(address: string): Promise<HopHostingInfo | null> {
   return new Promise((resolve) => {
