@@ -26,6 +26,7 @@ import {
   deleteTarget,
   listTargets,
   reorderTargets,
+  setTargetPingingEnabled,
   setTargetShowInOverview,
   updateTarget
 } from './db/targets'
@@ -198,7 +199,12 @@ function toggleMainWindow(): void {
 
 async function refreshCurrentTargets(): Promise<void> {
   currentTargets = await listTargets()
-  engine.sync(currentTargets.map((target) => ({ id: target.id, host: target.host })))
+  // A target with pinging disabled is simply left out of what the engine
+  // tracks - NetworkEngine.sync()'s existing diffing (stop timers for
+  // anything missing from this list) is what actually pauses it, the same
+  // mechanism a deleted target already relied on.
+  const pingedTargets = currentTargets.filter((target) => target.pingingEnabled)
+  engine.sync(pingedTargets.map((target) => ({ id: target.id, host: target.host })))
   watchdog.syncTargets(currentTargets.map((target) => ({ id: target.id, name: target.name })))
 }
 
@@ -285,6 +291,18 @@ function registerIpcHandlers(): void {
     async (event, id: string, showInOverview: boolean) => {
       assertTrustedSender(event.senderFrame)
       return setTargetShowInOverview(id, showInOverview)
+    }
+  )
+
+  ipcMain.handle(
+    IpcChannels.TargetsSetPingingEnabled,
+    async (event, id: string, pingingEnabled: boolean) => {
+      assertTrustedSender(event.senderFrame)
+      const target = await setTargetPingingEnabled(id, pingingEnabled)
+      // Unlike showInOverview, this actually starts/stops the engine's timer
+      // for this target - refreshCurrentTargets() re-syncs it in.
+      await refreshCurrentTargets()
+      return target
     }
   )
 

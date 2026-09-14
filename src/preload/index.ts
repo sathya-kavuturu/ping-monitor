@@ -21,6 +21,9 @@ const api: ExposedApi = {
   setTargetShowInOverview: (id, showInOverview) =>
     ipcRenderer.invoke(IpcChannels.TargetsSetShowInOverview, id, showInOverview),
 
+  setTargetPingingEnabled: (id, pingingEnabled) =>
+    ipcRenderer.invoke(IpcChannels.TargetsSetPingingEnabled, id, pingingEnabled),
+
   resolveHostname: (host) => ipcRenderer.invoke(IpcChannels.ResolveHostname, host),
 
   resolveHopHosting: (address) => ipcRenderer.invoke(IpcChannels.ResolveHopHosting, address),

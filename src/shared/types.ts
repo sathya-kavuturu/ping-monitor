@@ -13,6 +13,8 @@ export interface Target {
   sortOrder: number
   /** Whether this target appears in the Overview tab's charts. */
   showInOverview: boolean
+  /** Whether the engine actively pings/traceroutes this target - see `setTargetPingingEnabled`. */
+  pingingEnabled: boolean
   createdAt: Date
 }
 
@@ -207,6 +209,8 @@ export interface ExposedApi {
   reorderTargets: (orderedIds: string[]) => Promise<void>
   /** Toggled from the sidebar's right-click menu or the Overview tab's own checkboxes. */
   setTargetShowInOverview: (id: string, showInOverview: boolean) => Promise<Target>
+  /** Toggled from the sidebar's "Disable Pinging" dialog - starts/stops the engine tracking this target. */
+  setTargetPingingEnabled: (id: string, pingingEnabled: boolean) => Promise<Target>
   /** Resolves a DNS name (or IP literal, returned unchanged) to an IP address, or `null` if it can't be resolved. */
   resolveHostname: (host: string) => Promise<string | null>
   /** Looks up hosting/ISP info for a route hop's public IP - see `HopHostingInfo`. */

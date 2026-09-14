@@ -234,11 +234,21 @@ function OverviewChart({
     []
   )
 
+  // A pinging-disabled target produces no new samples at all, so it's
+  // excluded here regardless of `showInOverview` - `pingedTargets` (not
+  // `targets`) is what the checkbox list below offers, since re-checking
+  // "Show in Overview" for a paused target wouldn't make it appear anyway.
+  const pingedTargets = useMemo(() => targets.filter((target) => target.pingingEnabled), [targets])
+
   // The set of targets actually rendered in either view (combined chart's
-  // overlaid lines, or individual view's list of charts) - `targets` itself
-  // still holds every target, so the checkbox list below can keep showing
-  // (and re-enabling) ones a user hid via the sidebar's "Show in Overview".
-  const visibleTargets = useMemo(() => targets.filter((target) => target.showInOverview), [targets])
+  // overlaid lines, or individual view's list of charts) - `pingedTargets`
+  // itself still holds every actively-pinged target, so the checkbox list
+  // below can keep showing (and re-enabling) ones a user hid via the
+  // sidebar's "Show in Overview".
+  const visibleTargets = useMemo(
+    () => pingedTargets.filter((target) => target.showInOverview),
+    [pingedTargets]
+  )
 
   const isFitAllActive = fitAllInView && viewMode === 'individual'
 
@@ -508,9 +518,9 @@ function OverviewChart({
         </div>
       </header>
 
-      {viewMode === 'individual' && targets.length > 0 && (
+      {viewMode === 'individual' && pingedTargets.length > 0 && (
         <div className="target-checkbox-list">
-          {targets.map((target) => (
+          {pingedTargets.map((target) => (
             <label key={target.id} className="target-checkbox">
               <input
                 type="checkbox"

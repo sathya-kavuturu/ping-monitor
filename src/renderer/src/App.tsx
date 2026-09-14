@@ -16,6 +16,7 @@ import AddTargetDialog from './components/AddTargetDialog'
 import EditTargetDialog from './components/EditTargetDialog'
 import ConfirmDialog from './components/ConfirmDialog'
 import HelpDialog from './components/HelpDialog'
+import DisablePingingDialog from './components/DisablePingingDialog'
 import DbStorageView from './components/DbStorageView'
 import ImportedDbView from './components/ImportedDbView'
 
@@ -45,6 +46,7 @@ function App(): React.JSX.Element {
   const [pendingDeleteTarget, setPendingDeleteTarget] = useState<TargetWithStatus | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [isDisablePingingOpen, setIsDisablePingingOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -207,6 +209,14 @@ function App(): React.JSX.Element {
     })
   }, [])
 
+  const handleToggleTargetPinging = useCallback((target: TargetWithStatus) => {
+    const pingingEnabled = !target.pingingEnabled
+    setTargets((prev) => prev.map((t) => (t.id === target.id ? { ...t, pingingEnabled } : t)))
+    window.api.setTargetPingingEnabled(target.id, pingingEnabled).catch((error: unknown) => {
+      setLoadError(error instanceof Error ? error.message : 'Failed to update target')
+    })
+  }, [])
+
   const selectedTarget = targets.find((target) => target.id === selectedTargetId) ?? null
   const liveUpdates = selectedTargetId ? (updatesByTarget[selectedTargetId] ?? []) : []
 
@@ -237,8 +247,10 @@ function App(): React.JSX.Element {
         onSelectView={handleSelectView}
         onOpenAddTarget={handleOpenAddTarget}
         onOpenHelp={() => setIsHelpOpen(true)}
+        onOpenDisablePinging={() => setIsDisablePingingOpen(true)}
         onReorderTargets={handleReorderTargets}
         onToggleShowInOverview={handleToggleShowInOverview}
+        onToggleTargetPinging={handleToggleTargetPinging}
         onEditTarget={handleOpenEditTarget}
         onDeleteTarget={handleRequestDeleteTarget}
         error={loadError}
@@ -258,6 +270,13 @@ function App(): React.JSX.Element {
       )}
       <UpdateDialog />
       {isHelpOpen && <HelpDialog onClose={() => setIsHelpOpen(false)} />}
+      {isDisablePingingOpen && (
+        <DisablePingingDialog
+          targets={targets}
+          onTogglePinging={handleToggleTargetPinging}
+          onClose={() => setIsDisablePingingOpen(false)}
+        />
+      )}
       {isAddDialogOpen && (
         <AddTargetDialog
           onCreateTarget={handleCreateTarget}

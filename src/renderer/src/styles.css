@@ -272,6 +272,14 @@ body {
   color: var(--text-muted);
 }
 
+.modal-hint {
+  margin: -4px 0 0;
+  padding: 0 2px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
 .update-progress-track {
   height: 6px;
   border-radius: 999px;
@@ -420,6 +428,15 @@ body {
   border-top-color: var(--accent);
 }
 
+.target-row--paused {
+  opacity: 0.55;
+}
+
+.target-paused-tag {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
 .target-info {
   display: flex;
   flex-direction: column;
@@ -456,6 +473,10 @@ body {
 
 .status-offline {
   background: var(--offline);
+}
+
+.status-paused {
+  background: var(--text-muted);
 }
 
 .main-content {
@@ -542,6 +563,13 @@ body {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 8px;
+}
+
+.target-checkbox-list--column {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  max-height: 320px;
+  overflow-y: auto;
 }
 
 .target-checkbox {
@@ -696,6 +724,25 @@ body {
 
 .add-target-btn:hover {
   opacity: 0.9;
+}
+
+.disable-pinging-btn {
+  display: block;
+  width: calc(100% - 16px);
+  margin: 0 8px 16px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  padding: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.disable-pinging-btn:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
 }
 
 .feed-header-row {

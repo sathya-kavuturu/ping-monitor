@@ -11,8 +11,10 @@ interface SidebarProps {
   onSelectView: (view: MainView) => void
   onOpenAddTarget: () => void
   onOpenHelp: () => void
+  onOpenDisablePinging: () => void
   onReorderTargets: (orderedIds: string[]) => void
   onToggleShowInOverview: (target: TargetWithStatus) => void
+  onToggleTargetPinging: (target: TargetWithStatus) => void
   onEditTarget: (target: TargetWithStatus) => void
   onDeleteTarget: (target: TargetWithStatus) => void
   error: string | null
@@ -33,8 +35,10 @@ function Sidebar({
   onSelectView,
   onOpenAddTarget,
   onOpenHelp,
+  onOpenDisablePinging,
   onReorderTargets,
   onToggleShowInOverview,
+  onToggleTargetPinging,
   onEditTarget,
   onDeleteTarget,
   error
@@ -143,6 +147,9 @@ function Sidebar({
       <button type="button" className="add-target-btn" onClick={onOpenAddTarget}>
         + Add Target
       </button>
+      <button type="button" className="disable-pinging-btn" onClick={onOpenDisablePinging}>
+        Disable Pinging
+      </button>
 
       {error && <p className="sidebar-error">{error}</p>}
       {!error && targets.length === 0 && <p className="sidebar-empty">No targets yet</p>}
@@ -153,7 +160,7 @@ function Sidebar({
             key={target.id}
             className={`target-row ${draggedId === target.id ? 'target-row--dragging' : ''} ${
               dragOverId === target.id && draggedId !== target.id ? 'target-row--drag-over' : ''
-            }`}
+            } ${!target.pingingEnabled ? 'target-row--paused' : ''}`}
             draggable
             onDragStart={(event) => handleDragStart(event, target.id)}
             onDragOver={(event) => handleDragOver(event, target.id)}
@@ -178,9 +185,17 @@ function Sidebar({
               }`}
               onClick={() => onSelectTarget(target.id)}
             >
-              <span className={`status-dot status-${target.status}`} aria-hidden="true" />
+              <span
+                className={`status-dot ${
+                  target.pingingEnabled ? `status-${target.status}` : 'status-paused'
+                }`}
+                aria-hidden="true"
+              />
               <span className="target-info">
-                <span className="target-name">{target.name}</span>
+                <span className="target-name">
+                  {target.name}
+                  {!target.pingingEnabled && <span className="target-paused-tag"> · Paused</span>}
+                </span>
                 <span className="target-host">{target.host}</span>
               </span>
             </button>
@@ -198,6 +213,11 @@ function Sidebar({
               label: 'Show in Overview',
               checked: menu.target.showInOverview,
               onClick: () => onToggleShowInOverview(menu.target)
+            },
+            {
+              label: 'Pinging Enabled',
+              checked: menu.target.pingingEnabled,
+              onClick: () => onToggleTargetPinging(menu.target)
             },
             { label: 'Edit', onClick: () => onEditTarget(menu.target) },
             { label: 'Delete', onClick: () => onDeleteTarget(menu.target), danger: true }

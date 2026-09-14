@@ -70,3 +70,10 @@ export async function setTargetShowInOverview(
 ): Promise<Target> {
   return getPrisma().target.update({ where: { id }, data: { showInOverview } })
 }
+
+export async function setTargetPingingEnabled(
+  id: string,
+  pingingEnabled: boolean
+): Promise<Target> {
+  return getPrisma().target.update({ where: { id }, data: { pingingEnabled } })
+}
