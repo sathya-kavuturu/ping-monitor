@@ -1,12 +1,9 @@
 import type { NetworkUpdate } from '../../../shared/types'
-import { computeRollingLossPercent } from './chart-data'
 
 export interface OverviewSeries {
   targetId: string
   label: string
   latency: (number | null)[]
-  /** Rolling loss percentage per second (see `computeRollingLossPercent`) - only meaningful where `hasSample` is true. */
-  lossPercent: number[]
   /** Whether this target actually had a sample land in that second - distinguishes "no data yet" from "0% loss". */
   hasSample: boolean[]
 }
@@ -50,25 +47,20 @@ export function buildOverviewChartData(
 
   const series = targets.map((target) => {
     const updates = updatesByTarget[target.id] ?? []
-    const rollingLoss = computeRollingLossPercent(updates)
 
     const bySecondLatency = new Map<number, number | null>()
-    const bySecondLoss = new Map<number, number>()
     for (let i = 0; i < updates.length; i++) {
       const sec = Math.round(updates[i].timestamp / 1000 / bucketSec) * bucketSec
       bySecondLatency.set(sec, updates[i].latencyMs)
-      bySecondLoss.set(sec, rollingLoss[i])
     }
 
     const latency = xs.map((sec) => bySecondLatency.get(sec) ?? null)
-    const lossPercent = xs.map((sec) => bySecondLoss.get(sec) ?? 0)
     const hasSample = xs.map((sec) => bySecondLatency.has(sec))
 
     return {
       targetId: target.id,
       label: `${target.name} (${target.host})`,
       latency,
-      lossPercent,
       hasSample
     }
   })

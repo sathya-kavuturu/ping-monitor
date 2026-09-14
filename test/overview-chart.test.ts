@@ -31,7 +31,6 @@ describe('buildOverviewChartData', () => {
         targetId: 't1',
         label: 'Router (10.0.0.1)',
         latency: expect.any(Array),
-        lossPercent: expect.any(Array),
         hasSample: expect.any(Array)
       }
     ])
@@ -39,7 +38,6 @@ describe('buildOverviewChartData', () => {
     const secondIndex = data.xs.indexOf(59)
     expect(data.series[0].latency[secondIndex]).toBe(12)
     expect(data.series[0].hasSample[secondIndex]).toBe(true)
-    expect(data.series[0].lossPercent[secondIndex]).toBe(0)
 
     vi.useRealTimers()
   })
@@ -56,7 +54,7 @@ describe('buildOverviewChartData', () => {
     vi.useRealTimers()
   })
 
-  it('marks a lost ping as hasSample true with 100% rolling loss', () => {
+  it('marks a lost ping as hasSample true with a null latency', () => {
     vi.useFakeTimers()
     vi.setSystemTime(10_000)
 
@@ -68,7 +66,7 @@ describe('buildOverviewChartData', () => {
 
     const secondIndex = data.xs.indexOf(9)
     expect(data.series[0].hasSample[secondIndex]).toBe(true)
-    expect(data.series[0].lossPercent[secondIndex]).toBe(100)
+    expect(data.series[0].latency[secondIndex]).toBe(null)
 
     vi.useRealTimers()
   })

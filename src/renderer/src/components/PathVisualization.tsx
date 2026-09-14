@@ -1,6 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import type { HopHostingInfo } from '../../../shared/types'
-import { isPrivateOrReservedIp } from '../../../shared/ip-utils'
 import { buildPathGraph, YOU_HOP_NUMBER, type PathEdge, type PathNode } from '../lib/path-graph'
 import type { TraceRun } from '../lib/route-table'
 
@@ -53,14 +52,19 @@ function nodeLabel(
   if (node.hopNumber === YOU_HOP_NUMBER) return 'You'
   if (isLast) return targetName
   if (node.address === null) return 'No reply'
-  if (isPrivateOrReservedIp(node.address)) return 'Your Network'
+  // A private/reserved/CGNAT address (`isPrivateOrReservedIp`) never gets a
+  // hosting lookup - it's skipped entirely (see `ip-hosting.ts`) - so it
+  // naturally falls through to the hop number below. Deliberately not
+  // labeled "Your Network": that reads fine for hop 1 (your own router) but
+  // is misleading for the same kind of address appearing mid-path (e.g. an
+  // ISP's internal CGNAT hop), which isn't "yours" at all.
   const hosting = hostingByAddress.get(node.address)
   // Prefer the hop's hosting/network org name (e.g. "Google LLC", "Comcast
   // Cable Communications") over a raw reverse-DNS hostname - it says WHO
   // operates that hop at a glance, which a PTR record's hostname usually
   // doesn't make obvious. Falls back to the hostname, then the bare hop
-  // number, only while the lookup for a real public address is still
-  // pending or came back empty.
+  // number, for a private address or while the lookup for a real public
+  // address is still pending or came back empty.
   return hosting?.org ?? hosting?.isp ?? node.hostname ?? `Hop ${node.hopNumber}`
 }
 

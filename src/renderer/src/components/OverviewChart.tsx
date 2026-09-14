@@ -59,8 +59,7 @@ function buildOptions(
     padding: [12, 12, 0, 0],
     scales: {
       x: { time: true },
-      y: { range: (_self, _min, max) => [0, Math.max(50, max * 1.2)] },
-      loss: { range: [0, 100] }
+      y: { range: (_self, _min, max) => [0, Math.max(50, max * 1.2)] }
     },
     axes: [
       { stroke: COLOR_AXIS, grid: { stroke: COLOR_GRID }, ticks: { stroke: COLOR_GRID } },
@@ -69,15 +68,6 @@ function buildOptions(
         stroke: COLOR_AXIS,
         grid: { stroke: COLOR_GRID },
         ticks: { stroke: COLOR_GRID }
-      },
-      {
-        scale: 'loss',
-        side: 1,
-        label: 'Loss %',
-        stroke: COLOR_AXIS,
-        grid: { show: false },
-        ticks: { stroke: COLOR_GRID },
-        values: (_u, ticks) => ticks.map((tick) => `${tick}%`)
       }
     ],
     series: [
@@ -90,21 +80,6 @@ function buildOptions(
         width: 2,
         spanGaps: true,
         points: { show: false }
-      })),
-      // One dashed "rolling loss %" line per target, same color as its
-      // latency line so the pair reads as one target, on its own 0-100%
-      // axis - see `TimelineChart`'s identical mechanism for why (a burst
-      // of loss bars at a fast ping interval shouldn't read as worse than
-      // the same underlying rate at a slower one).
-      ...labels.map((label, index) => ({
-        label: `${label} (loss)`,
-        scale: 'loss',
-        stroke: colorFor(index),
-        width: 1.5,
-        dash: [4, 3] as [number, number],
-        spanGaps: true,
-        points: { show: false },
-        value: (_u: uPlot, v: number | null) => (v == null ? '--' : `${Math.round(v)}%`)
       }))
     ],
     legend: { show: true },
@@ -366,7 +341,6 @@ function OverviewChart({
     const { width, height } = container.getBoundingClientRect()
     const initialData: uPlot.AlignedData = [
       [],
-      ...visibleTargets.map(() => []),
       ...visibleTargets.map(() => [])
     ] as uPlot.AlignedData
     const plot = new uPlot(
@@ -444,7 +418,6 @@ function OverviewChart({
 
     const chartXs = historyData ? historyData.xs : xs
     const chartSeriesLatency = historyData ? historyData.series : series.map((s) => s.latency)
-    const chartSeriesLoss = historyData ? historyData.lossPercent : series.map((s) => s.lossPercent)
     lostSecondsRef.current = historyData
       ? historyData.lostSeconds
       : chartXs.filter((_, index) => chartSeriesLatency.some((latency) => latency[index] === null))
@@ -454,7 +427,7 @@ function OverviewChart({
     // canvas simply never repaints on a plain data tick, and the picture
     // only updates in one big jump whenever some unrelated layout reflow
     // happens to fire the ResizeObserver above.
-    plot.setData([chartXs, ...chartSeriesLatency, ...chartSeriesLoss], false)
+    plot.setData([chartXs, ...chartSeriesLatency], false)
     if (isCombinedZoomedRef.current) {
       // A manual drag-zoom is active - redraw() (rebuildPaths defaults true)
       // reapplies the plot's CURRENT x-scale bounds, preserving that zoom

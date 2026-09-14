@@ -39,10 +39,6 @@ interface IndividualLatencyChartProps {
 
 const COLOR_AXIS = '#8b91a2'
 const COLOR_GRID = 'rgba(255, 255, 255, 0.08)'
-// A muted, translucent version of the loss-bar red - reads as "the same
-// signal, smoothed" rather than a second, competing alarm color. Matches
-// `TimelineChart`'s identical constant.
-const COLOR_LOSS_TREND = 'rgba(230, 84, 62, 0.6)'
 
 function buildOptions(
   width: number,
@@ -58,8 +54,7 @@ function buildOptions(
     padding: [12, 12, 0, 0],
     scales: {
       x: { time: true },
-      y: { range: (_self, _min, max) => [0, Math.max(50, max * 1.2)] },
-      loss: { range: [0, 100] }
+      y: { range: (_self, _min, max) => [0, Math.max(50, max * 1.2)] }
     },
     axes: [
       { stroke: COLOR_AXIS, grid: { stroke: COLOR_GRID }, ticks: { stroke: COLOR_GRID } },
@@ -68,32 +63,13 @@ function buildOptions(
         stroke: COLOR_AXIS,
         grid: { stroke: COLOR_GRID },
         ticks: { stroke: COLOR_GRID }
-      },
-      {
-        scale: 'loss',
-        side: 1,
-        label: 'Loss %',
-        stroke: COLOR_AXIS,
-        grid: { show: false },
-        ticks: { stroke: COLOR_GRID },
-        values: (_u, ticks) => ticks.map((tick) => `${tick}%`)
       }
     ],
     series: [
       { value: formatLegendTimestamp },
       // spanGaps: runs the line right up to a loss marker instead of leaving
       // a blank sliver on either side of it - see `drawLossMarkers`.
-      { label, stroke: color, width: 2, spanGaps: true, points: { show: false } },
-      {
-        label: 'Loss (rolling)',
-        scale: 'loss',
-        stroke: COLOR_LOSS_TREND,
-        width: 1.5,
-        dash: [4, 3],
-        spanGaps: true,
-        points: { show: false },
-        value: (_u, v) => (v == null ? '--' : `${Math.round(v)}%`)
-      }
+      { label, stroke: color, width: 2, spanGaps: true, points: { show: false } }
     ],
     legend: { show: true },
     cursor: { drag: { x: true, y: false } },
@@ -118,11 +94,8 @@ function buildOptions(
  * single-target array) so the x-axis bucketing matches the combined view
  * exactly.
  *
- * Loss is shown two ways at once, same as `TimelineChart`: every lost ping
- * still draws as a thin red vertical bar (`drawLossMarkers`), and a dashed
- * "Loss (rolling)" line on its own 0-100% right-hand axis shows the
- * trailing-30-second loss rate, so a burst of bars at a fast ping interval
- * doesn't read as worse than the same underlying rate at a slower one.
+ * Every lost ping draws as a thin red vertical bar (`drawLossMarkers`),
+ * same as `TimelineChart`.
  */
 function IndividualLatencyChart({
   targetId,
@@ -198,7 +171,7 @@ function IndividualLatencyChart({
         },
         (u) => drawLossMarkers(u, lostSecondsRef.current)
       ),
-      [[], [], []],
+      [[], []],
       container
     )
     plotRef.current = plot
@@ -279,13 +252,11 @@ function IndividualLatencyChart({
 
     let xs: number[]
     let latency: (number | null)[]
-    let lossPercent: number[]
 
     if (selectedPreset.source === 'history') {
       const series = buildPingHistorySeries(historyRecords)
       xs = series.xs
       latency = series.avgLatency
-      lossPercent = series.lossPercent
       lostSecondsRef.current = series.lostBucketSeconds
     } else {
       const built = buildOverviewChartData(
@@ -296,7 +267,6 @@ function IndividualLatencyChart({
       )
       xs = built.xs
       latency = built.series[0]?.latency ?? []
-      lossPercent = built.series[0]?.lossPercent ?? []
       lostSecondsRef.current = xs.filter((_, index) => latency[index] === null)
     }
 
@@ -305,7 +275,7 @@ function IndividualLatencyChart({
     // canvas simply never repaints on a plain data tick, and the picture
     // only updates in one big jump whenever some unrelated layout reflow
     // happens to fire the ResizeObserver above.
-    plot.setData([xs, latency, lossPercent], false)
+    plot.setData([xs, latency], false)
     if (isZoomedRef.current) {
       // A manual drag-zoom is active - redraw() (rebuildPaths defaults true)
       // reapplies the plot's CURRENT x-scale bounds, preserving that zoom
