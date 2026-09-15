@@ -148,7 +148,7 @@ function Sidebar({
         + Add Target
       </button>
       <button type="button" className="disable-pinging-btn" onClick={onOpenDisablePinging}>
-        Disable Pinging
+        Enable / Disable Ping
       </button>
 
       {error && <p className="sidebar-error">{error}</p>}

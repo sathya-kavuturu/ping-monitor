@@ -192,12 +192,14 @@ function DbStorageView({ onImported }: DbStorageViewProps): React.JSX.Element {
           </section>
 
           <p className="storage-note">
-            The 30-day figure is an approximation, not a guarantee - it projects{' '}
-            <strong>PingHistory</strong> (1-minute rollups) and <strong>HopHistory</strong>{' '}
-            (traceroute hops) growth from today's average row size across{' '}
-            {targetCount === 1 ? '1 monitored target' : `${targetCount} monitored targets`} at the
-            current ping/traceroute cadence. It'll drift as hop counts and hostname lengths vary,
-            and doesn't include future schema changes or index growth.
+            The 30-day figure is an approximation, not a guarantee - it assumes{' '}
+            {targetCount === 1 ? 'the 1 added IP is' : `all ${targetCount} added IPs are`} pinged
+            around the clock (24 hours a day) for 30 days, and projects <strong>PingHistory</strong>{' '}
+            (1-minute rollups) and <strong>HopHistory</strong> (traceroute hops) growth from fixed,
+            schema-based per-row size assumptions - not from today's actual data. That means it only
+            changes when targets are added or removed, not from one day to the next as real hop
+            counts and hostname lengths vary, and it doesn't include future schema changes or index
+            growth.
           </p>
         </>
       )}
