@@ -5,8 +5,14 @@ export interface OverviewHistoryData {
   xs: number[]
   /** Per-target avg-latency arrays, in the same order as the `targets` argument, aligned to `xs` (`null` = no rollup for that target at that bucket). */
   series: (number | null)[][]
-  /** Union of every bucket (across all targets) with at least one lost sample - feeds the combined chart's red loss markers. */
-  lostSeconds: number[]
+  /**
+   * Per-target (same order as `series`) set of `xs` seconds where THAT
+   * target's own rollup had `lostCount > 0` - deliberately not unioned
+   * across targets, so the combined chart can mark only the series that
+   * actually lost a packet instead of drawing every target's line as "down"
+   * whenever any one of them was.
+   */
+  lostSecondsByTarget: Set<number>[]
 }
 
 /**
@@ -24,7 +30,6 @@ export function buildOverviewHistoryData(
   historyByTargetId: Record<string, PingHistoryRecord[]>
 ): OverviewHistoryData {
   const xsSet = new Set<number>()
-  const lostSecondsSet = new Set<number>()
   const bucketsByTarget = new Map<string, Map<number, PingHistoryRecord>>()
 
   for (const target of targets) {
@@ -33,7 +38,6 @@ export function buildOverviewHistoryData(
       const seconds = Math.round(new Date(record.bucketStart).getTime() / 1000)
       buckets.set(seconds, record)
       xsSet.add(seconds)
-      if (record.lostCount > 0) lostSecondsSet.add(seconds)
     }
     bucketsByTarget.set(target.id, buckets)
   }
@@ -43,10 +47,14 @@ export function buildOverviewHistoryData(
     const buckets = bucketsByTarget.get(target.id)
     return xs.map((seconds) => buckets?.get(seconds)?.avgLatencyMs ?? null)
   })
+  const lostSecondsByTarget = targets.map((target) => {
+    const buckets = bucketsByTarget.get(target.id)
+    const lost = new Set<number>()
+    for (const seconds of xs) {
+      if ((buckets?.get(seconds)?.lostCount ?? 0) > 0) lost.add(seconds)
+    }
+    return lost
+  })
 
-  return {
-    xs,
-    series,
-    lostSeconds: Array.from(lostSecondsSet).sort((a, b) => a - b)
-  }
+  return { xs, series, lostSecondsByTarget }
 }

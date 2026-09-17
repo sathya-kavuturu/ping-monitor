@@ -6,7 +6,11 @@ import type { TargetWithStatus } from '../App'
 import { buildOverviewChartData } from '../lib/overview-chart'
 import { buildOverviewHistoryData } from '../lib/overview-history-chart'
 import { TIMELINE_RANGE_PRESETS } from '../lib/chart-data'
-import { drawLossMarkers } from '../lib/chart-loss-markers'
+import {
+  drawPerSeriesLossMarkers,
+  interpolateAtGap,
+  type SeriesLossPoint
+} from '../lib/chart-loss-markers'
 import { formatLegendTimestamp } from '../lib/chart-legend'
 import TimeRangeControls from './TimeRangeControls'
 import IndividualLatencyChart, { type SyncedZoomRange } from './IndividualLatencyChart'
@@ -73,7 +77,7 @@ function buildOptions(
     series: [
       { value: formatLegendTimestamp },
       // spanGaps: runs each line right up to a loss marker instead of
-      // leaving a blank sliver on either side of it - see `drawLossMarkers`.
+      // leaving a blank sliver on either side of it - see `drawPerSeriesLossMarkers`.
       ...labels.map((label, index) => ({
         label,
         stroke: colorFor(index),
@@ -352,7 +356,7 @@ function OverviewChart({
           const fullSpanSec = rangeMsRef.current / 1000
           setIsCombinedZoomed(max - min < fullSpanSec - 1)
         },
-        (u) => drawLossMarkers(u, lostSecondsRef.current)
+        (u) => drawPerSeriesLossMarkers(u, lossPointsRef.current)
       ),
       initialData,
       container
@@ -393,8 +397,8 @@ function OverviewChart({
 
   // Read inside the combined chart's `draw` hook, which closes over the plot
   // instance created once on mount - a ref keeps it seeing the latest set of
-  // lost-ping timestamps without recreating the plot on every data tick.
-  const lostSecondsRef = useRef<number[]>([])
+  // per-series loss markers without recreating the plot on every data tick.
+  const lossPointsRef = useRef<SeriesLossPoint[]>([])
 
   const fitToRange = (): void => {
     const plot = plotRef.current
@@ -418,9 +422,25 @@ function OverviewChart({
 
     const chartXs = historyData ? historyData.xs : xs
     const chartSeriesLatency = historyData ? historyData.series : series.map((s) => s.latency)
-    lostSecondsRef.current = historyData
-      ? historyData.lostSeconds
-      : chartXs.filter((_, index) => chartSeriesLatency.some((latency) => latency[index] === null))
+
+    const lossPoints: SeriesLossPoint[] = []
+    chartSeriesLatency.forEach((latency, seriesIndex) => {
+      for (let index = 0; index < latency.length; index++) {
+        // A null entry means either a genuinely lost ping or (live mode
+        // only) a 1s grid slot no sample happened to land in at all -
+        // `hasSample`/`lostSecondsByTarget` are what tell those apart, so
+        // only a REAL loss for THIS series gets a marker, never a slot
+        // that's merely empty or another series' loss on the same x.
+        const isGenuineLoss = historyData
+          ? (historyData.lostSecondsByTarget[seriesIndex]?.has(chartXs[index]) ?? false)
+          : (series[seriesIndex]?.hasSample[index] ?? false) && latency[index] === null
+        if (!isGenuineLoss) continue
+        const y = interpolateAtGap(latency, index)
+        if (y === null) continue
+        lossPoints.push({ x: chartXs[index], y, color: colorFor(seriesIndex) })
+      }
+    })
+    lossPointsRef.current = lossPoints
 
     // setData's own resetScales:false path skips uPlot's internal commit()
     // entirely - so without an explicit redraw()/setScale() below, the

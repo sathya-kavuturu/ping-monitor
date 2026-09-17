@@ -49,6 +49,14 @@ import {
 } from './db/alert-rules'
 import type { Target as DbTarget } from '../generated/prisma/client'
 
+// Only one running copy should ever monitor/write to the DB at once - a
+// second launch (double-clicking the shortcut again, Windows starting it a
+// second time, etc.) just hands focus to the already-running instance
+// instead of spinning up a competing engine + tray icon.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+}
+
 let mainWindow: BrowserWindow | null = null
 // Only true once a real quit is underway (see 'before-quit') - lets the
 // window's 'close' handler tell "user clicked X" apart from "actually quitting".
@@ -62,6 +70,12 @@ let currentTargets: DbTarget[] = []
 const pingBuffers = new Map<string, RawPingSample[]>()
 let rollupFlushTimer: ReturnType<typeof setInterval> | null = null
 const ROLLUP_FLUSH_INTERVAL_MS = 60_000
+
+// Passed to the app's own exe via setLoginItemSettings below, and read back
+// out of process.argv on the launch it produces - lets this specific launch
+// tell "the OS started me at login" apart from "the user opened me", so only
+// the former skips showing the window.
+const AUTOSTART_HIDDEN_ARG = '--hidden'
 
 /**
  * The actual monitoring service: one ping loop (every 1s) + one traceroute
@@ -433,6 +447,16 @@ app.whenReady().then(async () => {
     })
   })
 
+  // Self-enforcing rather than a user-facing toggle: every launch re-asserts
+  // this, so it stays on even if something external (a Windows Startup
+  // cleanup tool, a reinstall) cleared it. Skipped in dev - it would
+  // otherwise register the raw `electron .` dev binary to run at login.
+  if (!is.dev) {
+    app.setLoginItemSettings({ openAtLogin: true, args: [AUTOSTART_HIDDEN_ARG] })
+  }
+  // Windows passes these same args through when it starts the app at login.
+  const startedHidden = process.argv.includes(AUTOSTART_HIDDEN_ARG)
+
   initDatabase()
   // Applied before the first sync so newly-tracked targets are already on
   // the persisted cadence, not the engine's built-in 1s default.
@@ -442,7 +466,12 @@ app.whenReady().then(async () => {
   rollupFlushTimer = setInterval(() => void flushPingRollups(), ROLLUP_FLUSH_INTERVAL_MS)
 
   registerIpcHandlers()
-  createWindow()
+  // A normal launch shows the dashboard right away; an autostart launch
+  // stays tray-only until the user opens it - monitoring (engine/tray/
+  // watchdog, all set up below regardless) doesn't need a window to run.
+  if (!startedHidden) {
+    createWindow()
+  }
   createTray({
     onToggleWindow: toggleMainWindow,
     onShowWindow: showMainWindow,
@@ -453,6 +482,13 @@ app.whenReady().then(async () => {
   app.on('activate', () => {
     showMainWindow()
   })
+})
+
+// Fires in the already-running instance when a second launch is attempted
+// (see requestSingleInstanceLock above) - bring our window up instead of
+// leaving the user wondering why nothing happened.
+app.on('second-instance', () => {
+  showMainWindow()
 })
 
 // Intentionally does NOT quit: the window's 'close' handler hides rather

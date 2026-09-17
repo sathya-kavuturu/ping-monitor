@@ -267,7 +267,16 @@ function IndividualLatencyChart({
       )
       xs = built.xs
       latency = built.series[0]?.latency ?? []
-      lostSecondsRef.current = xs.filter((_, index) => latency[index] === null)
+      const hasSample = built.series[0]?.hasSample ?? []
+      // A grid slot reads null both for a genuine timeout AND for an
+      // ordinary slot no sample happened to land in (real ping timing
+      // rarely lines up with the grid's exact 1s marks) - hasSample is what
+      // tells those apart. Without this check, every merely-empty slot drew
+      // as a false "lost ping" bar here, even though TimelineChart (which
+      // plots real updates 1:1 with no synthetic grid) never has the
+      // problem, which is why this chart used to show red bars that the
+      // target's own dedicated page didn't.
+      lostSecondsRef.current = xs.filter((_, index) => hasSample[index] && latency[index] === null)
     }
 
     // setData's own resetScales:false path skips uPlot's internal commit()
