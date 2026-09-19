@@ -41,7 +41,14 @@ const DEFAULT_PING_INTERVAL_MS = 1_000
 // Exported so storage-stats.ts can project HopHistory growth without
 // duplicating (and risking drift from) this constant - main/index.ts never
 // overrides it today, so it's the cadence every target actually runs at.
-export const DEFAULT_TRACE_INTERVAL_MS = 30_000
+//
+// Doubled from the original 30s: each trace fans out several concurrent
+// native ICMP hop probes (see traceroute-windows.ts's HOP_CONCURRENCY) that
+// share a fixed-size worker-thread pool with every target's ordinary 1s
+// ping - halving how often that batch fires halves how often it can queue
+// an unrelated ping behind it. Route paths don't change fast enough for the
+// staleness to matter.
+export const DEFAULT_TRACE_INTERVAL_MS = 60_000
 const DEFAULT_DEGRADED_THRESHOLD_MS = 150
 // Granularity (ms) of the evenly-spaced slots a traceroute cadence is
 // divided into for staggering - see the comment in track(). One slot per
