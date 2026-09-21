@@ -28,4 +28,13 @@ describe('buildChartSeries', () => {
     const series = buildChartSeries([update(1_000, 10), update(2_000, null)])
     expect(series.latency).toEqual([10, null])
   })
+
+  it('sorts by timestamp instead of trusting arrival order', () => {
+    // A slow probe from an earlier tick can resolve after a faster probe
+    // from a later tick already has - the update for second 1 arriving
+    // after second 2 here reproduces that.
+    const series = buildChartSeries([update(2_000, 20), update(1_000, 10), update(3_000, 30)])
+    expect(series.xs).toEqual([1, 2, 3])
+    expect(series.latency).toEqual([10, 20, 30])
+  })
 })

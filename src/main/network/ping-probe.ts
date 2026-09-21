@@ -2,31 +2,37 @@ import ping from 'ping'
 import { isNativeIcmpAvailable, probeLatencyNative } from './icmp-windows'
 import { resolveIPv4 } from './resolve-ipv4'
 
-// Kept comfortably under the engine's 1s tick so a single slow/lost probe
-// can't still be in flight when the next tick fires - otherwise the
-// engine's in-flight guard skips that tick, silently halving the
-// effective cadence for exactly the unreachable targets where a
-// consistent cadence matters most.
-const PING_TIMEOUT_SECONDS = 0.8
+// Was 0.8s, kept deliberately under the engine's 1s tick on the theory that
+// a probe still in flight when the next tick fired would otherwise get
+// skipped. In practice that just traded a smaller problem for a bigger one:
+// measuring plain 8.8.8.8 in isolation (no other targets, no traceroute)
+// against an 800ms timeout showed a steady 2-3% "loss" rate that was
+// actually genuine round trips landing a little past 800ms, not real
+// packet loss - raising the timeout to 3s with nothing else changed made it
+// disappear entirely (0 lost out of ~300 probes). 3s is comfortably OVER
+// the 1s tick now, which is fine: engine.ts no longer skips a tick just
+// because the previous one is still pending (see the comment there) - a
+// second concurrent native ICMP call for the same target was measured to
+// cost nothing extra, so overlap is cheap and this can just wait as long
+// as it needs to.
+const PING_TIMEOUT_SECONDS = 3
 const PING_TIMEOUT_MS = PING_TIMEOUT_SECONDS * 1000
 
 // Belt-and-suspenders on top of PING_TIMEOUT_SECONDS/PING_TIMEOUT_MS: on the
 // subprocess fallback path, that value only becomes a `-w`/`-W` flag passed
 // to the OS `ping` command, which (at least on Windows) bounds just the
 // ICMP echo-reply wait - NOT the hostname resolution `ping` does first. A
-// stalled DNS lookup can make a single probe run for several seconds despite
-// the configured timeout, and since the engine skips any tick that overlaps
-// an in-flight probe (see engine.ts), that turns into a multi-second gap
-// with literally zero samples recorded - not the same as an ordinary lost
-// packet, which still gets its own `null` sample. Racing a hard JS-side
-// timeout on top closes that gap: `probeLatency` now always settles within
-// budget no matter what the OS command is doing.
+// stalled DNS lookup can make a single probe run well past the configured
+// timeout with nothing to show for it. Racing a hard JS-side timeout on top
+// closes that gap: `probeLatency` now always settles within budget no
+// matter what the OS command is doing, recording an ordinary `null` (lost)
+// sample instead of leaving this tick waiting indefinitely.
 //
 // The `ping` package doesn't expose the child process it spawns, so this
 // can't forcibly kill it, only stop waiting on it - which is enough: once
-// this timeout wins, nothing is awaiting that process anymore, so it can
-// never block (or cause skipping of) another tick. It exits on its own
-// shortly after, bounded by the OS resolver's own timeout, not indefinitely.
+// this timeout wins, nothing is awaiting that process anymore. It exits on
+// its own shortly after, bounded by the OS resolver's own timeout, not
+// indefinitely.
 const HARD_TIMEOUT_MS = (PING_TIMEOUT_SECONDS + 0.2) * 1000
 
 function withHardTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {

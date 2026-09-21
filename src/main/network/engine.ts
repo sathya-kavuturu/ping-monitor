@@ -30,7 +30,6 @@ export interface NetworkEngineOptions {
 interface TargetState {
   target: EngineTarget
   timer: ReturnType<typeof setInterval>
-  pingInFlight: boolean
   traceInFlight: boolean
   lastTraceAt: number
   lastHops: HopSample[]
@@ -41,14 +40,7 @@ const DEFAULT_PING_INTERVAL_MS = 1_000
 // Exported so storage-stats.ts can project HopHistory growth without
 // duplicating (and risking drift from) this constant - main/index.ts never
 // overrides it today, so it's the cadence every target actually runs at.
-//
-// Doubled from the original 30s: each trace fans out several concurrent
-// native ICMP hop probes (see traceroute-windows.ts's HOP_CONCURRENCY) that
-// share a fixed-size worker-thread pool with every target's ordinary 1s
-// ping - halving how often that batch fires halves how often it can queue
-// an unrelated ping behind it. Route paths don't change fast enough for the
-// staleness to matter.
-export const DEFAULT_TRACE_INTERVAL_MS = 60_000
+export const DEFAULT_TRACE_INTERVAL_MS = 30_000
 const DEFAULT_DEGRADED_THRESHOLD_MS = 150
 // Granularity (ms) of the evenly-spaced slots a traceroute cadence is
 // divided into for staggering - see the comment in track(). One slot per
@@ -145,7 +137,6 @@ export class NetworkEngine {
     const staggerMs = ((this.states.size % slotCount) * this.traceIntervalMs) / slotCount
     const state: TargetState = {
       target,
-      pingInFlight: false,
       traceInFlight: false,
       lastTraceAt: Date.now() - this.traceIntervalMs + staggerMs,
       lastHops: [],
@@ -161,14 +152,21 @@ export class NetworkEngine {
     const state = this.states.get(targetId)
     if (!state) return
 
-    // Guard against a slow probe still running when the next tick fires -
-    // skip rather than pile up overlapping pings for the same target.
-    if (!state.pingInFlight) {
-      state.pingInFlight = true
-      this.runPing(state).finally(() => {
-        state.pingInFlight = false
-      })
-    }
+    // Deliberately NOT guarded against a previous probe still being in
+    // flight (there used to be a `pingInFlight` skip-this-tick check here).
+    // That guard traded one problem for a worse one: `probeLatency`'s own
+    // timeout (see ping-probe.ts) needs real headroom above genuine latency
+    // spikes - measuring plain 8.8.8.8 in isolation, a strict 800ms timeout
+    // read 2-3% "loss" that was actually real (if rare) round trips landing
+    // just past 800ms, confirmed by the fact that raising the timeout to
+    // 3000ms with nothing else changed made the loss disappear entirely.
+    // But 3000ms is longer than this 1s tick, so skipping an overlapping
+    // tick would silently drop a whole sample instead of just recording a
+    // slow-but-real one. Firing every tick regardless and letting probes
+    // overlap is the fix: the same measurement showed 5 concurrent native
+    // ICMP calls to the same target cost no more loss than 1 does, so
+    // there's nothing to protect by serializing them.
+    void this.runPing(state)
 
     const dueForTrace = Date.now() - state.lastTraceAt >= this.traceIntervalMs
     if (dueForTrace && !state.traceInFlight) {

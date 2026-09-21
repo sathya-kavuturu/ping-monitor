@@ -4,23 +4,14 @@ import { probeHopNative } from './icmp-windows'
 const MAX_HOPS = 30
 const PER_HOP_TIMEOUT_MS = 1_000
 // Koffi runs each async native call on a worker thread from its own fixed
-// pool, sized by koffi itself from the machine's core count - not something
-// this app can resize. Firing all 30 hops at once was found to starve that
-// pool badly enough that concurrent ping probes (which use the same pool)
-// got queued for 1-7 seconds and were recorded as false packet loss once our
-// own timeout gave up on them. Capping how many hops are in flight at once
-// keeps a trace's own footprint on that shared pool small, at the cost of a
-// trace taking a few pool-sized batches instead of one - still far faster
-// than the old subprocess-per-hop `tracert`.
-//
-// Even at the previous value of 3, a live DB check across 5 targets each
-// tracing every 30s still showed a steady ~1-3 lost pings/minute per target
-// with otherwise completely normal latency (13-20ms, nowhere near the ping
-// timeout) - the signature of the same pool-contention effect at smaller
-// scale, not real network loss. Dropping to 2 (paired with the longer trace
-// interval below) further shrinks a trace's peak concurrent footprint on the
-// pool it shares with every target's ordinary 1s ping.
-const HOP_CONCURRENCY = 2
+// pool (not something this app can resize) - firing all 30 hops at once was
+// found to starve that pool badly enough that concurrent ping probes (which
+// use the same pool) got queued for 1-7 seconds and were recorded as false
+// packet loss once our own timeout gave up on them. Capping how many hops
+// are in flight at once keeps a trace's own footprint on that shared pool
+// small, at the cost of a trace taking a few pool-sized batches instead of
+// one - still far faster than the old subprocess-per-hop `tracert`.
+const HOP_CONCURRENCY = 3
 
 /**
  * Native Windows traceroute: every hop is probed by the same persistent
