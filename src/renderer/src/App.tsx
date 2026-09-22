@@ -241,6 +241,7 @@ function App(): React.JSX.Element {
       <Sidebar
         isOpen={sidebarOpen}
         targets={targets}
+        updatesByTarget={updatesByTarget}
         selectedTargetId={selectedTargetId}
         mainView={mainView}
         onSelectTarget={handleSelectTarget}

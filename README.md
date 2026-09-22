@@ -79,8 +79,10 @@ src/
         overview-history-chart.ts               # DB-backed (24h/7d/30d) equivalent of overview-chart.ts
         ping-history-chart.ts                     # PingHistoryRecord[] -> uPlot series, incl. per-bucket loss %
         use-hop-hosting.ts                          # shared, cached hosting/ISP lookup hook
+        target-loss.ts                                # rolling recent loss % + severity, for the sidebar's badge
       components/
-        Sidebar.tsx                    # target list: add/reorder/edit/delete, "Disable Pinging" trigger
+        Sidebar.tsx                    # target list: add/reorder/edit/delete, "Disable Pinging" trigger,
+                                        #   a rolling loss-% badge per target
         MainContent.tsx                 # stat cards + alerts + timeline chart + route table + network path
         TimelineChart.tsx                 # uPlot: latency, loss bars + rolling loss % line, last 10 min
         RouteTable.tsx                     # MTR-style hop table with hostname/hosting-org lookups
@@ -244,12 +246,18 @@ dialog) is enforced one level up, in `src/main/index.ts#refreshCurrentTargets`, 
 disabled targets out of the list passed to `sync()` - the same mechanism a deleted target already
 relied on to stop being monitored.
 
-- **Ping, every 1s** (`ping-probe.ts`): one ICMP echo via the OS `ping` command, through the
-  [`ping`](https://www.npmjs.com/package/ping) npm package (`ping.promise.probe`, `min_reply: 1`,
-  `timeout: 1.5s`). Returns latency in ms, or `null` if the packet was lost - the engine derives
-  `status` from that (`null` → `offline`, `> 150ms` → `degraded`, else `online`) and broadcasts a
-  `NetworkUpdate` immediately. A per-target in-flight guard skips a tick rather than overlapping
-  pings if a probe is still running when the next one fires.
+- **Ping, every 1s** (`ping-probe.ts`): one ICMP echo, via a persistent native handle
+  (`icmp-windows.ts`, `IcmpSendEcho` through `iphlpapi.dll`) on Windows, or the OS `ping` command
+  via the [`ping`](https://www.npmjs.com/package/ping) npm package elsewhere. Returns latency in
+  ms, or `null` if the packet was lost - the engine derives `status` from that (`null` → `offline`,
+  `> 150ms` → `degraded`, else `online`) and broadcasts a `NetworkUpdate` immediately. The timeout
+  is 3s, not 1s: an earlier, tighter 800ms timeout was measured (see git history around the "ping
+  and trace handling" refactor) to read a steady 2-3% "loss" on a target with zero actual loss in a
+  parallel `ping.exe` run - genuine round trips that landed just past 800ms, not real packet loss.
+  Since 3s is longer than the 1s tick, ticks are deliberately **not** guarded against a previous
+  probe for the same target still being in flight (there used to be a `pingInFlight` skip-this-tick
+  check here) - that guard would otherwise silently drop whole samples now that a slow-but-real
+  reply can outlive its own tick; overlapping probes were measured to cost nothing extra.
 - **Traceroute, every 30s** (`traceroute.ts`/`traceroute-windows.ts`, backed by native ICMP via
   `icmp-windows.ts` on Windows for per-hop TTL control): parses each hop into a `HopSample`
   (hop number, address, latency; `null` address/latency = that hop never replied - a common,
@@ -300,9 +308,12 @@ traceroute runs - a hop that disagrees between runs (router load-balancing acros
 paths) shows as parallel branches that re-merge once the runs agree again. Each node's label
 prefers, in order: the hop's hosting/network org name (e.g. "Google LLC"), its reverse-DNS
 hostname, `"Your Network"` for your own private/CGNAT gateway hop, or `"No reply"` for a hop that
-never answered at all - a bare `"Hop N"` is only ever a last resort. Selecting a time range on the
-timeline chart re-queries the path for that same window (`getHopHistoryRange`), so Network Path
-isn't limited to only ever showing the live buffer's most recent runs.
+never answered at all - a bare `"Hop N"` is only ever a last resort. Every node is colored by
+`route-table.ts#hopStatus` - the same per-hop-number loss % `RouteTable` computes, not just that
+node's own latency - so a hop that's silent part of the time reads as degraded/offline even on the
+branch where it did reply, instead of only the separate "silent" branch looking unhealthy. Selecting
+a time range on the timeline chart re-queries the path for that same window (`getHopHistoryRange`),
+so Network Path isn't limited to only ever showing the live buffer's most recent runs.
 
 **Route table** (`RouteTable.tsx`) is deliberately _not_ a plain dump of the latest traceroute -
 `route-table.ts` aggregates several recent runs into one row per hop number (address/hostname/
@@ -317,6 +328,13 @@ own per-target checkbox to hide/show it. Either mode can point at the live buffe
 24h/7d/30d range is selected, at DB-backed history (`overview-history-chart.ts`) - a target that
 currently has pinging disabled (see below) never appears in either mode, since it has no live or
 historical data worth charting for that window.
+
+**Sidebar loss badge** (`target-loss.ts`, rendered in `Sidebar.tsx`): each target row shows a small
+colored badge with its rolling loss % over the last 60 seconds of live samples - separate from the
+status dot, which only reflects the single most recent sample. Thresholds: nothing below 0%, amber
+under 5%, orange 5-15%, red 15%+. It's a pure function of the trailing window, not a timer someone
+has to clear, so it disappears on its own once a full window has passed with no lost packet -
+"colored for as long as there's been loss," nothing more to manage.
 
 **Disable Pinging** (`DisablePingingDialog.tsx`, opened from the sidebar): a checkbox list of
 every target, checked = actively pinged. Unchecking one immediately stops its engine timer (see

@@ -9,6 +9,10 @@
   --online: #3ecf8e;
   --degraded: #e6b93e;
   --offline: #e6543e;
+  /* Middle tier of the sidebar's rolling loss-percent badge (target-loss.ts) -
+     sits between --degraded and --offline, reserved for that severity scale
+     rather than reused as a general warning color. */
+  --loss-serious: #e6821e;
   font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
@@ -612,6 +616,39 @@ body {
 .status-badge.status-offline {
   color: var(--offline);
   border-color: var(--offline);
+}
+
+/* Sidebar-row indicator for a target's rolling loss % (target-loss.ts) -
+   distinct from .status-dot/.status-badge, which reflect only the latest
+   sample. Hidden entirely at 0% recent loss, and clears on its own once the
+   trailing window ages out the last lost sample. */
+.loss-badge {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.loss-badge--warning {
+  color: var(--degraded);
+  border-color: var(--degraded);
+  background: rgba(230, 185, 62, 0.12);
+}
+
+.loss-badge--serious {
+  color: var(--loss-serious);
+  border-color: var(--loss-serious);
+  background: rgba(230, 130, 30, 0.12);
+}
+
+.loss-badge--critical {
+  color: var(--offline);
+  border-color: var(--offline);
+  background: rgba(230, 84, 62, 0.14);
 }
 
 .stat-grid {

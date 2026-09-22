@@ -30,6 +30,11 @@ function HelpDialog({ onClose }: HelpDialogProps): React.JSX.Element {
               Right-click a target for <strong>Show in Overview</strong> (toggles whether it appears
               in the Overview tab's charts - also toggleable from Overview itself), Edit, or Delete.
             </li>
+            <li>
+              A target with recent packet loss shows a small colored badge (e.g. "12% loss") next to
+              its name - amber for under 5%, orange for 5-15%, red for 15% and up, based on the last
+              minute of pings. It clears on its own once a full minute passes clean again.
+            </li>
             <li>The collapse button (top-left) hides the sidebar to reclaim screen space.</li>
           </ul>
         </section>
@@ -50,7 +55,9 @@ function HelpDialog({ onClose }: HelpDialogProps): React.JSX.Element {
             </li>
             <li>
               <strong>Network Path</strong> draws every hop from you to the target as a chain of
-              nodes, colored by health. Hover a node for its IP, hostname, hosting/ISP org, and
+              nodes, colored by that hop's loss rate across recent traceroute runs: green (healthy),
+              amber (some loss or high latency), red (heavy loss, 20% or more), or a hollow dot for a
+              hop that never replies at all. Hover a node for its IP, hostname, hosting/ISP org, and
               average response time. A hop that branches into several parallel nodes means different
               traceroute runs saw different routers answer there (load balancing).
             </li>

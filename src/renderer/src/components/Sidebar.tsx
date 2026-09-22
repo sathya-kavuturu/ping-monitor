@@ -1,10 +1,13 @@
 import { useState, type DragEvent } from 'react'
+import type { NetworkUpdate } from '../../../shared/types'
 import type { MainView, TargetWithStatus } from '../App'
+import { computeRecentLossPercent, lossSeverity } from '../lib/target-loss'
 import ContextMenu from './ContextMenu'
 
 interface SidebarProps {
   isOpen: boolean
   targets: TargetWithStatus[]
+  updatesByTarget: Record<string, NetworkUpdate[]>
   selectedTargetId: string | null
   mainView: MainView
   onSelectTarget: (id: string) => void
@@ -29,6 +32,7 @@ interface TargetMenuState {
 function Sidebar({
   isOpen,
   targets,
+  updatesByTarget,
   selectedTargetId,
   mainView,
   onSelectTarget,
@@ -155,52 +159,66 @@ function Sidebar({
       {!error && targets.length === 0 && <p className="sidebar-empty">No targets yet</p>}
 
       <ul className="target-list">
-        {targets.map((target) => (
-          <li
-            key={target.id}
-            className={`target-row ${draggedId === target.id ? 'target-row--dragging' : ''} ${
-              dragOverId === target.id && draggedId !== target.id ? 'target-row--drag-over' : ''
-            } ${!target.pingingEnabled ? 'target-row--paused' : ''}`}
-            draggable
-            onDragStart={(event) => handleDragStart(event, target.id)}
-            onDragOver={(event) => handleDragOver(event, target.id)}
-            onDragLeave={() => setDragOverId((current) => (current === target.id ? null : current))}
-            onDrop={(event) => handleDrop(event, target.id)}
-            onDragEnd={() => {
-              setDraggedId(null)
-              setDragOverId(null)
-            }}
-            onContextMenu={(event) => {
-              event.preventDefault()
-              setMenu({ target, x: event.clientX, y: event.clientY })
-            }}
-          >
-            <span className="target-drag-handle" aria-hidden="true">
-              ⠿
-            </span>
-            <button
-              type="button"
-              className={`target-item ${
-                mainView === 'target' && target.id === selectedTargetId ? 'is-selected' : ''
-              }`}
-              onClick={() => onSelectTarget(target.id)}
+        {targets.map((target) => {
+          const recentLossPercent = target.pingingEnabled
+            ? computeRecentLossPercent(updatesByTarget[target.id] ?? [], Date.now())
+            : null
+          const severity = lossSeverity(recentLossPercent)
+
+          return (
+            <li
+              key={target.id}
+              className={`target-row ${draggedId === target.id ? 'target-row--dragging' : ''} ${
+                dragOverId === target.id && draggedId !== target.id ? 'target-row--drag-over' : ''
+              } ${!target.pingingEnabled ? 'target-row--paused' : ''}`}
+              draggable
+              onDragStart={(event) => handleDragStart(event, target.id)}
+              onDragOver={(event) => handleDragOver(event, target.id)}
+              onDragLeave={() =>
+                setDragOverId((current) => (current === target.id ? null : current))
+              }
+              onDrop={(event) => handleDrop(event, target.id)}
+              onDragEnd={() => {
+                setDraggedId(null)
+                setDragOverId(null)
+              }}
+              onContextMenu={(event) => {
+                event.preventDefault()
+                setMenu({ target, x: event.clientX, y: event.clientY })
+              }}
             >
-              <span
-                className={`status-dot ${
-                  target.pingingEnabled ? `status-${target.status}` : 'status-paused'
-                }`}
-                aria-hidden="true"
-              />
-              <span className="target-info">
-                <span className="target-name">
-                  {target.name}
-                  {!target.pingingEnabled && <span className="target-paused-tag"> · Paused</span>}
-                </span>
-                <span className="target-host">{target.host}</span>
+              <span className="target-drag-handle" aria-hidden="true">
+                ⠿
               </span>
-            </button>
-          </li>
-        ))}
+              <button
+                type="button"
+                className={`target-item ${
+                  mainView === 'target' && target.id === selectedTargetId ? 'is-selected' : ''
+                }`}
+                onClick={() => onSelectTarget(target.id)}
+              >
+                <span
+                  className={`status-dot ${
+                    target.pingingEnabled ? `status-${target.status}` : 'status-paused'
+                  }`}
+                  aria-hidden="true"
+                />
+                <span className="target-info">
+                  <span className="target-name">
+                    {target.name}
+                    {!target.pingingEnabled && <span className="target-paused-tag"> · Paused</span>}
+                  </span>
+                  <span className="target-host">{target.host}</span>
+                </span>
+                {severity !== 'none' && (
+                  <span className={`loss-badge loss-badge--${severity}`}>
+                    {Math.round(recentLossPercent ?? 0)}% loss
+                  </span>
+                )}
+              </button>
+            </li>
+          )
+        })}
       </ul>
 
       {menu && (

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import type { HopHostingInfo } from '../../../shared/types'
 import { buildPathGraph, YOU_HOP_NUMBER, type PathEdge, type PathNode } from '../lib/path-graph'
-import type { TraceRun } from '../lib/route-table'
+import { buildRouteTable, hopStatus, type HopVisualStatus, type TraceRun } from '../lib/route-table'
 
 interface PathVisualizationProps {
   /** Pre-collected runs from either the live buffer or a DB-backed timeframe query - see `MainContent`. */
@@ -11,11 +11,9 @@ interface PathVisualizationProps {
   hostingByAddress: Map<string, HopHostingInfo | null>
 }
 
-type NodeStatus = 'online' | 'degraded' | 'silent'
-
 interface HoverInfo {
   node: PathNode
-  status: NodeStatus
+  status: HopVisualStatus
   totalRuns: number
   /** Viewport coordinates of the hovered node - `position: fixed` anchors to these directly. */
   anchor: { left: number; top: number }
@@ -31,16 +29,24 @@ interface EdgePath {
   d: string
 }
 
-const DEGRADED_LATENCY_MS = 150
-
 function formatMs(value: number | null): string {
   return value === null ? '—' : `${Math.round(value)} ms`
 }
 
-function nodeStatus(node: PathNode): NodeStatus {
-  if (node.address === null) return 'silent'
-  if (node.latencyMs !== null && node.latencyMs > DEGRADED_LATENCY_MS) return 'degraded'
-  return 'online'
+/**
+ * Reuses `RouteTable`'s own per-hop-number loss percentage (`hopStatus`) so
+ * a hop reads the same "healthy/degraded/offline/silent" way in both views,
+ * rather than this graph judging a node by latency alone. A node here is
+ * one (hop, address) branch - see `path-graph.ts` - so a branch that always
+ * replies still needs its *hop's* aggregate loss (silent runs are their own
+ * separate branch) to know whether that hop as a whole is dropping packets.
+ */
+function nodeStatus(node: PathNode, lossPercentByHop: Map<number, number>): HopVisualStatus {
+  return hopStatus({
+    address: node.address,
+    latencyMs: node.latencyMs,
+    lossPercent: lossPercentByHop.get(node.hopNumber) ?? 0
+  })
 }
 
 function nodeLabel(
@@ -68,12 +74,14 @@ function nodeLabel(
   return hosting?.org ?? hosting?.isp ?? node.hostname ?? `Hop ${node.hopNumber}`
 }
 
-function statusText(status: NodeStatus): string {
+function statusText(status: HopVisualStatus): string {
   switch (status) {
     case 'online':
       return 'Healthy'
     case 'degraded':
       return 'Degraded'
+    case 'offline':
+      return 'Heavy loss'
     case 'silent':
       return 'No probe reply'
   }
@@ -122,6 +130,11 @@ function PathVisualization({
 }: PathVisualizationProps): React.JSX.Element {
   const graph = useMemo(() => buildPathGraph(runs), [runs])
   const you = useMemo(() => youNode(graph.runCount), [graph.runCount])
+  const lossPercentByHop = useMemo(() => {
+    const map = new Map<number, number>()
+    for (const row of buildRouteTable(runs).rows) map.set(row.hopNumber, row.lossPercent)
+    return map
+  }, [runs])
 
   const containerRef = useRef<HTMLDivElement>(null)
   const nodeRefs = useRef(new Map<string, HTMLDivElement>())
@@ -182,7 +195,7 @@ function PathVisualization({
     const rect = event.currentTarget.getBoundingClientRect()
     setHover({
       node,
-      status: nodeStatus(node),
+      status: nodeStatus(node, lossPercentByHop),
       totalRuns: graph.runCount,
       anchor: { left: rect.left + rect.width / 2, top: rect.top }
     })
@@ -233,7 +246,7 @@ function PathVisualization({
             return (
               <div className="path-column" key={column.hopNumber}>
                 {column.nodes.map((node) => {
-                  const status = nodeStatus(node)
+                  const status = nodeStatus(node, lossPercentByHop)
                   return (
                     <div
                       className={[
