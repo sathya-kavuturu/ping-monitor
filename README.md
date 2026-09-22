@@ -254,10 +254,17 @@ relied on to stop being monitored.
   is 3s, not 1s: an earlier, tighter 800ms timeout was measured (see git history around the "ping
   and trace handling" refactor) to read a steady 2-3% "loss" on a target with zero actual loss in a
   parallel `ping.exe` run - genuine round trips that landed just past 800ms, not real packet loss.
-  Since 3s is longer than the 1s tick, ticks are deliberately **not** guarded against a previous
-  probe for the same target still being in flight (there used to be a `pingInFlight` skip-this-tick
-  check here) - that guard would otherwise silently drop whole samples now that a slow-but-real
-  reply can outlive its own tick; overlapping probes were measured to cost nothing extra.
+  Each target's own tick is still guarded against its previous probe still being in flight
+  (`pingInFlight` - skip this tick rather than overlap), even though 3s outlives the 1s tick: that
+  guard was briefly removed on the theory that a slow-but-real reply would otherwise get silently
+  dropped instead of sampled, which measured fine for a single reachable target (5 concurrent native
+  ICMP calls to one host cost no extra loss over 1). It doesn't hold once a target is genuinely
+  unreachable, though - with no guard, a host that never replies picks up a brand new overlapping
+  call every tick forever, so a handful of dead targets steady-state at 3-4 simultaneous in-flight
+  calls each, all contending for the ONE shared native ICMP handle (`icmp-windows.ts`). Measured
+  directly: 4 always-unreachable targets mixed in with 10 reliable ones collapsed _every_ target,
+  not just the dead ones, to ~99% loss - restoring the guard fixed it, and a skipped tick for a
+  target that was never going to reply anyway costs nothing worth having.
 - **Traceroute, every 30s** (`traceroute.ts`/`traceroute-windows.ts`, backed by native ICMP via
   `icmp-windows.ts` on Windows for per-hop TTL control): parses each hop into a `HopSample`
   (hop number, address, latency; `null` address/latency = that hop never replied - a common,

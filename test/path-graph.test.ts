@@ -88,4 +88,53 @@ describe('buildPathGraph', () => {
     expect(silentNode).toBeDefined()
     expect(silentNode?.runCount).toBe(1)
   })
+
+  function silentHop(hopNumber: number): HopSample {
+    return { hopNumber, address: null, hostname: null, latencyMs: null }
+  }
+
+  it("drops a one-off failed run's phantom tail once the retained window is full", () => {
+    // 19 clean 2-hop runs, plus one straggler that never reached the
+    // destination and silently timed out all the way to hop 25 - the exact
+    // shape of traceroute-windows.ts hitting MAX_HOPS after a transient
+    // hiccup on an otherwise reliably 2-hop target.
+    const cleanHops = [hop(1, '192.168.154.1'), hop(2, '192.168.99.102')]
+    const runs: TraceRun[] = []
+    for (let i = 0; i < 19; i++) runs.push(run(i * 1000, cleanHops))
+    const strandedHops = Array.from({ length: 25 }, (_, i) => silentHop(i + 1))
+    runs.push(run(19_000, strandedHops))
+
+    const graph = buildPathGraph(runs)
+
+    // Only the two real hops remain - not 25.
+    expect(graph.columns).toHaveLength(2)
+    expect(graph.columns.map((c) => c.hopNumber)).toEqual([1, 2])
+  })
+
+  it('keeps a node that recurs often enough even in a full window', () => {
+    const cleanHops = [hop(1, 'A'), hop(2, 'B')]
+    const runs: TraceRun[] = []
+    for (let i = 0; i < 15; i++) runs.push(run(i * 1000, cleanHops))
+    // A router that only answers a real, recurring 25% of the time -
+    // frequent enough that it shouldn't be filtered away as noise.
+    for (let i = 0; i < 5; i++) runs.push(run((15 + i) * 1000, [hop(1, 'A'), hop(2, 'C')]))
+
+    const graph = buildPathGraph(runs)
+    expect(graph.columns[1].nodes.map((n) => n.address).sort()).toEqual(['B', 'C'])
+  })
+
+  it('does not filter at all while the retained window is still small', () => {
+    // Only 3 runs total - well under the activation threshold, so even a
+    // hop seen just once should still show (same as the branching test
+    // above), rather than being mistaken for a full-window straggler.
+    const graph = buildPathGraph([
+      run(100, [hop(1, 'A'), hop(2, 'B')]),
+      run(200, [hop(1, 'A'), hop(2, 'B')]),
+      run(300, [hop(1, 'A'), ...Array.from({ length: 10 }, (_, i) => silentHop(i + 2))])
+    ])
+
+    expect(graph.columns.map((c) => c.hopNumber)).toEqual(
+      Array.from({ length: 11 }, (_, i) => i + 1)
+    )
+  })
 })

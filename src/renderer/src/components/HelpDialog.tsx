@@ -56,10 +56,10 @@ function HelpDialog({ onClose }: HelpDialogProps): React.JSX.Element {
             <li>
               <strong>Network Path</strong> draws every hop from you to the target as a chain of
               nodes, colored by that hop's loss rate across recent traceroute runs: green (healthy),
-              amber (some loss or high latency), red (heavy loss, 20% or more), or a hollow dot for a
-              hop that never replies at all. Hover a node for its IP, hostname, hosting/ISP org, and
-              average response time. A hop that branches into several parallel nodes means different
-              traceroute runs saw different routers answer there (load balancing).
+              amber (some loss or high latency), red (heavy loss, 20% or more), or a hollow dot for
+              a hop that never replies at all. Hover a node for its IP, hostname, hosting/ISP org,
+              and average response time. A hop that branches into several parallel nodes means
+              different traceroute runs saw different routers answer there (load balancing).
             </li>
             <li>
               <strong>Route Table</strong> is an MTR-style view: one row per hop with loss % and a

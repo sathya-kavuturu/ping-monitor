@@ -266,7 +266,7 @@ function PathVisualization({
                       <span className="path-node-label">
                         {nodeLabel(node, isLastColumn, targetName, hostingByAddress)}
                       </span>
-                      {isBranch && (
+                      {(isBranch || node.runCount < graph.runCount) && (
                         <span className="path-node-branch-tag">
                           {node.runCount}/{graph.runCount}
                         </span>

@@ -41,6 +41,31 @@ function nodeKey(hopNumber: number, address: string | null): string {
 }
 
 /**
+ * Below this many retained runs, presence filtering is skipped entirely - a
+ * hop seen in only 1 of 2-3 runs is exactly the kind of real branching this
+ * graph exists to show (see the "splits a hop into branches" test), not
+ * something to hide. Filtering only kicks in once the window is reasonably
+ * full (close to `MAX_RUNS` in route-table.ts), where there's been enough
+ * of a chance to tell "a real, recurring feature of the path" apart from a
+ * single fluke run.
+ */
+const MIN_RUNS_TO_FILTER = 10
+
+/**
+ * Below this fraction of the retained runs, a (hop, address) node is noise
+ * rather than a real feature of the path. Without this floor, a single
+ * traceroute run that never reached the destination (traceroute-windows.ts
+ * hits MAX_HOPS=30 after every TTL up to that point came back silent/
+ * unresolved - a real but transient hiccup, e.g. a momentary Wi-Fi drop)
+ * would inject up to ~28 fake "silent" hop columns into the graph, each with
+ * `runCount: 1`. Those then persist and look like a permanent, 20-30-hop
+ * path for the rest of the retention window (up to ~10 minutes at the
+ * default 30s trace cadence), even though every other retained run reached
+ * the destination in one or two hops.
+ */
+const MIN_NODE_RUN_FRACTION = 0.1
+
+/**
  * Builds a directed graph of every (hop number, address) pair seen across
  * the retained traceroute runs, plus the actual hop-to-hop transitions each
  * individual run took. Unlike a single flattened path, this can represent a
@@ -121,6 +146,9 @@ export function buildPathGraph(runs: TraceRun[]): PathGraph {
     columnsByHop.set(node.hopNumber, column)
   }
 
+  const enoughRunsToFilter = runs.length >= MIN_RUNS_TO_FILTER
+  const minNodeRunCount = Math.ceil(runs.length * MIN_NODE_RUN_FRACTION)
+
   const columns: PathColumn[] = Array.from(columnsByHop.keys())
     .sort((a, b) => a - b)
     .map((hopNumber) => ({
@@ -129,8 +157,10 @@ export function buildPathGraph(runs: TraceRun[]): PathGraph {
       // any) first, then the rest by how often they appeared.
       nodes: columnsByHop
         .get(hopNumber)!
+        .filter((node) => !enoughRunsToFilter || node.runCount >= minNodeRunCount)
         .sort((a, b) => b.runCount - a.runCount || (a.address ?? '').localeCompare(b.address ?? ''))
     }))
+    .filter((column) => column.nodes.length > 0)
 
   return {
     columns,

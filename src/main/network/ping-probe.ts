@@ -10,11 +10,10 @@ import { resolveIPv4 } from './resolve-ipv4'
 // actually genuine round trips landing a little past 800ms, not real
 // packet loss - raising the timeout to 3s with nothing else changed made it
 // disappear entirely (0 lost out of ~300 probes). 3s is comfortably OVER
-// the 1s tick now, which is fine: engine.ts no longer skips a tick just
-// because the previous one is still pending (see the comment there) - a
-// second concurrent native ICMP call for the same target was measured to
-// cost nothing extra, so overlap is cheap and this can just wait as long
-// as it needs to.
+// the 1s tick, which is fine even though engine.ts DOES still skip a tick
+// for a target whose own previous probe hasn't resolved yet (see the
+// `pingInFlight` comment there) - that guard only ever delays how often a
+// slow-but-real reply gets sampled, never turns it into a false loss.
 const PING_TIMEOUT_SECONDS = 3
 const PING_TIMEOUT_MS = PING_TIMEOUT_SECONDS * 1000
 

@@ -62,10 +62,10 @@ export interface ChartSeries {
  * Turns a target's raw live-update buffer into uPlot-ready series.
  *
  * Sorts by timestamp rather than trusting arrival order: `App.tsx`'s buffer
- * only ever appends, but the engine no longer serializes a target's probes
- * (see engine.ts's `tick()`) - a slow probe from an earlier tick can now
- * resolve and arrive after a faster probe from a later tick already has,
- * which would otherwise hand uPlot x-values that briefly run backwards.
+ * only ever appends, and the engine is back to serializing each target's own
+ * probes one at a time (engine.ts's `tick()` `pingInFlight` guard), but this
+ * costs nothing to keep as a defensive floor in case that ever changes again
+ * - cheap insurance against uPlot x-values briefly running backwards.
  */
 export function buildChartSeries(updates: NetworkUpdate[]): ChartSeries {
   const sorted = [...updates].sort((a, b) => a.timestamp - b.timestamp)
