@@ -4,6 +4,7 @@ import type { NetworkUpdate, PingHistoryRecord } from '../../../shared/types'
 import { buildOverviewChartData } from '../lib/overview-chart'
 import { buildPingHistorySeries } from '../lib/ping-history-chart'
 import { TIMELINE_RANGE_PRESETS } from '../lib/chart-data'
+import { attachWheelPan, isManuallyPositioned } from '../lib/chart-pan'
 import { drawLossMarkers } from '../lib/chart-loss-markers'
 import { formatLegendTimestamp } from '../lib/chart-legend'
 
@@ -163,7 +164,11 @@ function IndividualLatencyChart({
         color,
         (min, max) => {
           const fullSpanSec = rangeMsRef.current / 1000
-          const zoomed = max - min < fullSpanSec - 1
+          // Covers a drag-zoom AND a wheel-pan (see `attachWheelPan` below) -
+          // either way, this chart broadcasts the new range below so every
+          // other individual chart follows it, whether the move was a zoom
+          // or just a scroll.
+          const zoomed = isManuallyPositioned(min, max, fullSpanSec)
           setIsZoomed(zoomed)
           if (!isSyncingRef.current) {
             onZoomChangeRef.current(targetId, zoomed, min, max)
@@ -175,6 +180,7 @@ function IndividualLatencyChart({
       container
     )
     plotRef.current = plot
+    const detachWheelPan = attachWheelPan(plot)
 
     const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0]
@@ -192,6 +198,7 @@ function IndividualLatencyChart({
 
     return () => {
       resizeObserver.disconnect()
+      detachWheelPan()
       plot.destroy()
       plotRef.current = null
     }

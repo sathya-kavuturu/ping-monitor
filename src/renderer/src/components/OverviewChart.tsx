@@ -6,6 +6,7 @@ import type { TargetWithStatus } from '../App'
 import { buildOverviewChartData } from '../lib/overview-chart'
 import { buildOverviewHistoryData } from '../lib/overview-history-chart'
 import { TIMELINE_RANGE_PRESETS } from '../lib/chart-data'
+import { attachWheelPan, isManuallyPositioned } from '../lib/chart-pan'
 import {
   drawPerSeriesLossMarkers,
   interpolateAtGap,
@@ -354,7 +355,7 @@ function OverviewChart({
         labels,
         (min, max) => {
           const fullSpanSec = rangeMsRef.current / 1000
-          setIsCombinedZoomed(max - min < fullSpanSec - 1)
+          setIsCombinedZoomed(isManuallyPositioned(min, max, fullSpanSec))
         },
         (u) => drawPerSeriesLossMarkers(u, lossPointsRef.current)
       ),
@@ -362,6 +363,7 @@ function OverviewChart({
       container
     )
     plotRef.current = plot
+    const detachWheelPan = attachWheelPan(plot)
 
     const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0]
@@ -379,6 +381,7 @@ function OverviewChart({
 
     return () => {
       resizeObserver.disconnect()
+      detachWheelPan()
       plot.destroy()
       plotRef.current = null
       setIsCombinedZoomed(false)

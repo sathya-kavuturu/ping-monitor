@@ -3,6 +3,7 @@ import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import type { ImportedDbInfo, PingHistoryRecord, Target } from '../../../shared/types'
 import { buildPingHistorySeries } from '../lib/ping-history-chart'
+import { attachWheelPan } from '../lib/chart-pan'
 import { drawLossMarkers } from '../lib/chart-loss-markers'
 
 const COLOR_LATENCY = '#4f8cff'
@@ -136,6 +137,7 @@ function ImportedDbView(): React.JSX.Element {
       container
     )
     plotRef.current = plot
+    const detachWheelPan = attachWheelPan(plot)
 
     const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0]
@@ -149,6 +151,7 @@ function ImportedDbView(): React.JSX.Element {
 
     return () => {
       resizeObserver.disconnect()
+      detachWheelPan()
       plot.destroy()
       plotRef.current = null
     }

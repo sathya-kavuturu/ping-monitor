@@ -15,6 +15,20 @@ export const RECENT_LOSS_WINDOW_MS = 60_000
  * packet out of two looks like 50%) - mirrors the watchdog's own MIN_SAMPLES. */
 const MIN_SAMPLES = 5
 
+// MIN_SAMPLES alone still lets a target that was only just added show a
+// scary percentage: right after app start, a single genuinely-transient lost
+// probe among the first 5-8 samples reads as 20-13% "loss" - and, mapped
+// through lossSeverity, as 'critical' (red) - for something that's really
+// one blip, not a trend. It only looks that way because the window hasn't
+// had time to fill: the same one lost sample among the ~60 that eventually
+// land in a full RECENT_LOSS_WINDOW_MS dilutes down to ~1-2%, which is why
+// this was reported as "loss that slowly decreases" right after opening the
+// app - the underlying loss rate never changed, only the sample count it was
+// computed over did. Requiring the recent window to actually SPAN close to its
+// nominal duration before trusting the percentage removes that false alarm
+// without touching the steady-state behavior at all.
+const MIN_OBSERVED_SPAN_MS = 30_000
+
 export type LossSeverity = 'none' | 'warning' | 'serious' | 'critical'
 
 /**
@@ -26,6 +40,11 @@ export function computeRecentLossPercent(updates: NetworkUpdate[], now: number):
   const cutoff = now - RECENT_LOSS_WINDOW_MS
   const recent = updates.filter((update) => update.timestamp >= cutoff)
   if (recent.length < MIN_SAMPLES) return null
+
+  // `updates` is always ascending by timestamp (App.tsx's rolling buffer only
+  // ever appends), so the first surviving entry is the oldest one in view.
+  const oldestRecent = recent[0].timestamp
+  if (now - oldestRecent < MIN_OBSERVED_SPAN_MS) return null
 
   const lostCount = recent.filter((update) => update.latencyMs === null).length
   return (100 * lostCount) / recent.length

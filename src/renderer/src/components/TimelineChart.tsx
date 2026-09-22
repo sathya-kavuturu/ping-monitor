@@ -4,6 +4,7 @@ import 'uplot/dist/uPlot.min.css'
 import type { NetworkUpdate, PingHistoryRecord } from '../../../shared/types'
 import { buildChartSeries, TIMELINE_RANGE_PRESETS } from '../lib/chart-data'
 import { buildPingHistorySeries } from '../lib/ping-history-chart'
+import { attachWheelPan, isManuallyPositioned } from '../lib/chart-pan'
 import { COLOR_LOSS, drawLossMarkers } from '../lib/chart-loss-markers'
 import { formatLegendTimestamp } from '../lib/chart-legend'
 import TimeRangeControls from './TimeRangeControls'
@@ -169,12 +170,13 @@ function TimelineChart({
         Math.max(height, 1),
         (min, max) => {
           visibleBoundsRef.current = { min, max }
-          // A manual drag-zoom shrinks the visible span below the selected
-          // preset's full width - that's the only way `isZoomed` flips true,
-          // so an explicit fitToRange() (which restores the full span) always
-          // clears it again.
+          // A manual drag-zoom or wheel-pan (see `attachWheelPan` below)
+          // moves the view away from the live default - that's the only way
+          // `isZoomed` flips true, so an explicit fitToRange() (which
+          // restores both the full span and the live edge) always clears it
+          // again.
           const fullSpanSec = rangeMsRef.current / 1000
-          setIsZoomed(max - min < fullSpanSec - 1)
+          setIsZoomed(isManuallyPositioned(min, max, fullSpanSec))
         },
         (u) => drawLossMarkers(u, lostSecondsRef.current)
       ),
@@ -182,6 +184,7 @@ function TimelineChart({
       container
     )
     plotRef.current = plot
+    const detachWheelPan = attachWheelPan(plot)
 
     const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0]
@@ -199,6 +202,7 @@ function TimelineChart({
 
     return () => {
       resizeObserver.disconnect()
+      detachWheelPan()
       plot.destroy()
       plotRef.current = null
     }
