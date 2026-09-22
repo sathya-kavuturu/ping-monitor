@@ -71,6 +71,19 @@ interface EchoResult {
 let native: NativeIcmp | null = null
 let initFailed = false
 
+// `sendEcho.async` hands the OS a raw pointer into `replyBuffer` and (when a
+// TTL is set) into the `options` struct, then returns immediately - nothing
+// in the call arguments themselves keeps V8 from GC-ing either object before
+// the OS actually finishes writing into them. That's a real use-after-free,
+// not a theoretical one: under sustained concurrent load (ping + traceroute
+// both hammering the shared handle at once, as engine.ts normally does),
+// this reproduced as an outright process crash within a few seconds, and
+// more often as silent memory corruption that degraded every target's ping
+// to total loss at once - not just the contended ones. Keeping a reference
+// alive here until the callback fires is the fix; the set is emptied as
+// soon as each call's callback runs.
+const inFlightBuffers = new Set<unknown>()
+
 function ipv4ToUint32(ip: string): number | null {
   const parts = ip.split('.')
   if (parts.length !== 4) return null
@@ -147,6 +160,11 @@ async function sendEcho(
           'IpOptionInformation *'
         )
 
+  // Pinned for the lifetime of this one call - see the comment on
+  // `inFlightBuffers` above for why this isn't optional.
+  const pin = { replyBuffer, options }
+  inFlightBuffers.add(pin)
+
   const replyCount = await new Promise<number>((resolve, reject) => {
     icmp.sendEcho.async(
       icmp.handle,
@@ -158,6 +176,7 @@ async function sendEcho(
       replyBuffer.length,
       timeoutMs,
       (error, result) => {
+        inFlightBuffers.delete(pin)
         if (error) reject(error)
         else resolve(result)
       }
