@@ -1,12 +1,39 @@
 import { autoUpdater } from 'electron-updater'
 import { app } from 'electron'
 import type { BrowserWindow } from 'electron'
+import fs from 'node:fs'
+import path from 'node:path'
 import type { UpdateStatusEvent } from '../shared/types'
 import { IpcChannels } from '../shared/ipc-channels'
 
 // Packaged builds only: in dev there's no packaged app.asar / app-update.yml
 // for electron-updater to read, and it would just error out on every check.
 const canCheckForUpdates = (): boolean => app.isPackaged
+
+// electron-updater ships its own info/warn/error/debug logger hook but logs
+// nowhere by default - a failed download or a stuck differential-update
+// patch (NsisUpdater's own cache under `<app>-updater/`) previously left no
+// trail at all beyond the four coarse states already forwarded to the
+// renderer (checking/available/downloading/error). This gives every run a
+// permanent, appendable record of exactly what electron-updater itself saw
+// (HTTP errors, checksum mismatches, which download strategy it picked) -
+// plain fs, no new dependency, since electron-updater only needs an object
+// shaped like a logger, not any particular library.
+function updateLogPath(): string {
+  return path.join(app.getPath('userData'), 'update.log')
+}
+
+function fileLogger(level: string, args: unknown[]): void {
+  const message = args
+    .map((arg) => (arg instanceof Error ? (arg.stack ?? arg.message) : String(arg)))
+    .join(' ')
+  const line = `[${new Date().toISOString()}] [${level}] ${message}\n`
+  try {
+    fs.appendFileSync(updateLogPath(), line)
+  } catch {
+    // Logging is best-effort - never let a disk error break the update flow.
+  }
+}
 
 let getWindow: (() => BrowserWindow | null) | null = null
 
@@ -31,6 +58,12 @@ export function initAutoUpdater(windowGetter: () => BrowserWindow | null): void 
   // without asking first.
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = false
+  autoUpdater.logger = {
+    info: (...args: unknown[]) => fileLogger('info', args),
+    warn: (...args: unknown[]) => fileLogger('warn', args),
+    error: (...args: unknown[]) => fileLogger('error', args),
+    debug: (...args: unknown[]) => fileLogger('debug', args)
+  }
 
   autoUpdater.on('checking-for-update', () => send({ state: 'checking' }))
   autoUpdater.on('update-available', (info) => send({ state: 'available', version: info.version }))
