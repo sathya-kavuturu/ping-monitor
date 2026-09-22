@@ -58,6 +58,15 @@ export function initAutoUpdater(windowGetter: () => BrowserWindow | null): void 
   // without asking first.
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = false
+  // The default differential (block-map delta patch) download fetches the
+  // new installer as many small HTTP byte-range requests against the old
+  // one already on disk - update.log showed this stalling for minutes,
+  // crawling forward a few hundred KB at a time with no error ever raised,
+  // apparently from how poorly this network path tolerates that many small
+  // chunked requests through GitHub's release-asset CDN redirect. A single
+  // plain full-file download of the ~100MB installer has none of that
+  // per-chunk fragility - more bytes over the wire, but it actually finishes.
+  autoUpdater.disableDifferentialDownload = true
   autoUpdater.logger = {
     info: (...args: unknown[]) => fileLogger('info', args),
     warn: (...args: unknown[]) => fileLogger('warn', args),
