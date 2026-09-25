@@ -1,6 +1,12 @@
 import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import type { HopHostingInfo } from '../../../shared/types'
-import { buildPathGraph, YOU_HOP_NUMBER, type PathEdge, type PathNode } from '../lib/path-graph'
+import {
+  buildPathGraph,
+  currentPathFromRuns,
+  YOU_HOP_NUMBER,
+  type PathEdge,
+  type PathNode
+} from '../lib/path-graph'
 import { buildRouteTable, hopStatus, type HopVisualStatus, type TraceRun } from '../lib/route-table'
 
 interface PathVisualizationProps {
@@ -15,6 +21,7 @@ interface HoverInfo {
   node: PathNode
   status: HopVisualStatus
   totalRuns: number
+  isCurrent: boolean
   /** Viewport coordinates of the hovered node - `position: fixed` anchors to these directly. */
   anchor: { left: number; top: number }
 }
@@ -129,6 +136,7 @@ function PathVisualization({
   hostingByAddress
 }: PathVisualizationProps): React.JSX.Element {
   const graph = useMemo(() => buildPathGraph(runs), [runs])
+  const currentPath = useMemo(() => currentPathFromRuns(runs), [runs])
   const you = useMemo(() => youNode(graph.runCount), [graph.runCount])
   const lossPercentByHop = useMemo(() => {
     const map = new Map<number, number>()
@@ -197,11 +205,25 @@ function PathVisualization({
       node,
       status: nodeStatus(node, lossPercentByHop),
       totalRuns: graph.runCount,
+      isCurrent: currentPath.nodeKeys.has(node.key),
       anchor: { left: rect.left + rect.width / 2, top: rect.top }
     })
   }
 
   const branchingCount = graph.columns.filter((column) => column.nodes.length > 1).length
+
+  // Draw current-path edges last so they paint on top of the muted
+  // historical ones they run alongside at a branch (SVG/DOM paint order
+  // follows document order, and neither has a z-index to fight over).
+  const orderedEdgePaths = useMemo(
+    () =>
+      [...edgePaths].sort((a, b) => {
+        const aCurrent = currentPath.edgeKeys.has(`${a.edge.fromKey}->${a.edge.toKey}`)
+        const bCurrent = currentPath.edgeKeys.has(`${b.edge.fromKey}->${b.edge.toKey}`)
+        return aCurrent === bCurrent ? 0 : aCurrent ? 1 : -1
+      }),
+    [edgePaths, currentPath]
+  )
 
   return (
     <section className="feed">
@@ -214,19 +236,33 @@ function PathVisualization({
         </span>
       </div>
 
+      {branchingCount > 0 && (
+        <div className="path-legend">
+          <span className="path-legend-item">
+            <span className="path-legend-swatch path-legend-swatch--current" />
+            Current path (latest trace)
+          </span>
+          <span className="path-legend-item">
+            <span className="path-legend-swatch path-legend-swatch--alt" />
+            Alternate route seen before
+          </span>
+        </div>
+      )}
+
       <div className="path-viz-scroll">
         <div className="path-viz" ref={containerRef} onMouseLeave={() => setHover(null)}>
           <svg className="path-edges" aria-hidden="true">
-            {edgePaths.map(({ edge, d }) => {
+            {orderedEdgePaths.map(({ edge, d }) => {
               const weight = graph.runCount > 0 ? edge.runCount / graph.runCount : 1
+              const isCurrent = currentPath.edgeKeys.has(`${edge.fromKey}->${edge.toKey}`)
               return (
                 <path
                   key={`${edge.fromKey}->${edge.toKey}`}
                   d={d}
                   fill="none"
-                  stroke="var(--text-muted)"
-                  strokeWidth={1 + weight * 2}
-                  opacity={0.25 + weight * 0.55}
+                  stroke={isCurrent ? 'var(--accent)' : 'var(--text-muted)'}
+                  strokeWidth={isCurrent ? 2.5 : 1 + weight * 2}
+                  opacity={isCurrent ? 0.95 : 0.2 + weight * 0.4}
                 />
               )
             })}
@@ -234,7 +270,10 @@ function PathVisualization({
 
           <div className="path-column">
             <div className="path-node" onMouseEnter={(event) => handleEnter(event, you)}>
-              <div className="path-node-dot status-online" ref={registerNodeRef(you.key)} />
+              <div
+                className="path-node-dot status-online path-node-dot--current"
+                ref={registerNodeRef(you.key)}
+              />
               <span className="path-node-label">You</span>
             </div>
           </div>
@@ -247,12 +286,14 @@ function PathVisualization({
               <div className="path-column" key={column.hopNumber}>
                 {column.nodes.map((node) => {
                   const status = nodeStatus(node, lossPercentByHop)
+                  const isCurrent = currentPath.nodeKeys.has(node.key)
                   return (
                     <div
                       className={[
                         'path-node',
                         isLastColumn && 'path-node--destination',
-                        isBranch && 'path-node--branch'
+                        isBranch && 'path-node--branch',
+                        isBranch && !isCurrent && 'path-node--alt'
                       ]
                         .filter(Boolean)
                         .join(' ')}
@@ -260,7 +301,13 @@ function PathVisualization({
                       onMouseEnter={(event) => handleEnter(event, node)}
                     >
                       <div
-                        className={`path-node-dot status-${status}`}
+                        className={[
+                          'path-node-dot',
+                          `status-${status}`,
+                          isCurrent && 'path-node-dot--current'
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
                         ref={registerNodeRef(node.key)}
                       />
                       <span className="path-node-label">
@@ -297,6 +344,12 @@ function PathVisualization({
           <div className="path-tooltip-row">
             <span>IP Address</span>
             <span>{hover.node.address ?? '—'}</span>
+          </div>
+          <div className="path-tooltip-row">
+            <span>Current path</span>
+            <span className={hover.isCurrent ? 'path-tooltip-current-yes' : undefined}>
+              {hover.isCurrent ? 'Yes - latest trace' : 'No - past run only'}
+            </span>
           </div>
           {hover.node.hostname && (
             <div className="path-tooltip-row">

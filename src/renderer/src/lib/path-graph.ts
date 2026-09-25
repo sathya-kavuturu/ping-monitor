@@ -36,7 +36,7 @@ export interface PathGraph {
   latestCapturedAt: number | null
 }
 
-function nodeKey(hopNumber: number, address: string | null): string {
+export function nodeKey(hopNumber: number, address: string | null): string {
   return `${hopNumber}:${address ?? 'silent'}`
 }
 
@@ -168,4 +168,45 @@ export function buildPathGraph(runs: TraceRun[]): PathGraph {
     runCount: runs.length,
     latestCapturedAt: runs[runs.length - 1].capturedAt
   }
+}
+
+export interface CurrentPath {
+  /** Node keys (see `nodeKey`) the most recent completed run actually visited, including "You". */
+  nodeKeys: Set<string>
+  /** Edge keys (`${fromKey}->${toKey}`) the most recent run actually traversed. */
+  edgeKeys: Set<string>
+  capturedAt: number | null
+}
+
+const EMPTY_CURRENT_PATH: CurrentPath = { nodeKeys: new Set(), edgeKeys: new Set(), capturedAt: null }
+
+/**
+ * Picks out the single (hop, address) sequence the most recent completed
+ * traceroute run actually took, so a UI can highlight it against the full
+ * multi-run `PathGraph` - which otherwise shows every branch any retained
+ * run has ever used, with no way to tell which one traffic is on *right
+ * now*. `runs` is oldest-first (see `TraceRun`/`collectRuns`), so the
+ * current path is simply the last entry's own hop list, walked the same way
+ * `buildPathGraph` walks every run.
+ */
+export function currentPathFromRuns(runs: TraceRun[]): CurrentPath {
+  if (runs.length === 0) return EMPTY_CURRENT_PATH
+
+  const latest = runs[runs.length - 1]
+  const sortedHops = [...latest.hops].sort((a, b) => a.hopNumber - b.hopNumber)
+
+  const nodeKeys = new Set<string>()
+  const edgeKeys = new Set<string>()
+  const youKey = nodeKey(YOU_HOP_NUMBER, null)
+  nodeKeys.add(youKey)
+
+  let previousKey = youKey
+  for (const hop of sortedHops) {
+    const key = nodeKey(hop.hopNumber, hop.address)
+    nodeKeys.add(key)
+    edgeKeys.add(`${previousKey}->${key}`)
+    previousKey = key
+  }
+
+  return { nodeKeys, edgeKeys, capturedAt: latest.capturedAt }
 }

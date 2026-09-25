@@ -1132,6 +1132,37 @@ body {
   cursor: default;
 }
 
+.path-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 2px 0 0;
+}
+
+.path-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.path-legend-swatch {
+  width: 16px;
+  height: 2px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.path-legend-swatch--current {
+  background: var(--accent);
+}
+
+.path-legend-swatch--alt {
+  background: var(--text-muted);
+  opacity: 0.5;
+}
+
 .path-viz-scroll {
   overflow-x: auto;
   padding: 4px 0 20px;
@@ -1181,6 +1212,16 @@ body {
   box-shadow:
     0 0 0 1px var(--border),
     0 0 0 3px var(--bg);
+}
+
+.path-node--alt {
+  opacity: 0.55;
+}
+
+.path-node-dot--current {
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--accent);
 }
 
 .path-node-branch-tag {
@@ -1277,4 +1318,9 @@ body {
 .path-tooltip-row span:last-child {
   color: var(--text);
   font-variant-numeric: tabular-nums;
+}
+
+.path-tooltip-current-yes {
+  color: var(--accent) !important;
+  font-weight: 600;
 }

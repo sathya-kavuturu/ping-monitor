@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildPathGraph, YOU_HOP_NUMBER } from '../src/renderer/src/lib/path-graph'
+import { buildPathGraph, currentPathFromRuns, YOU_HOP_NUMBER } from '../src/renderer/src/lib/path-graph'
 import type { TraceRun } from '../src/renderer/src/lib/route-table'
 import type { HopSample } from '../src/shared/types'
 
@@ -136,5 +136,51 @@ describe('buildPathGraph', () => {
     expect(graph.columns.map((c) => c.hopNumber)).toEqual(
       Array.from({ length: 11 }, (_, i) => i + 1)
     )
+  })
+})
+
+describe('currentPathFromRuns', () => {
+  const youKey = `${YOU_HOP_NUMBER}:silent`
+
+  it('is empty when no run has completed', () => {
+    expect(currentPathFromRuns([])).toEqual({
+      nodeKeys: new Set(),
+      edgeKeys: new Set(),
+      capturedAt: null
+    })
+  })
+
+  it("picks out only the most recent run's own branch, ignoring older alternates", () => {
+    const runs = [
+      run(100, [hop(1, 'A'), hop(2, 'B1'), hop(3, 'C')]),
+      run(200, [hop(1, 'A'), hop(2, 'B1'), hop(3, 'C')]),
+      run(300, [hop(1, 'A'), hop(2, 'B2'), hop(3, 'C')])
+    ]
+
+    const current = currentPathFromRuns(runs)
+
+    expect(current.capturedAt).toBe(300)
+    expect(current.nodeKeys.has(youKey)).toBe(true)
+    expect(current.nodeKeys.has('1:A')).toBe(true)
+    expect(current.nodeKeys.has('2:B2')).toBe(true)
+    expect(current.nodeKeys.has('2:B1')).toBe(false)
+    expect(current.nodeKeys.has('3:C')).toBe(true)
+
+    expect(current.edgeKeys.has(`${youKey}->1:A`)).toBe(true)
+    expect(current.edgeKeys.has('1:A->2:B2')).toBe(true)
+    expect(current.edgeKeys.has('1:A->2:B1')).toBe(false)
+    expect(current.edgeKeys.has('2:B2->3:C')).toBe(true)
+  })
+
+  it('reflects a latest run that stopped short of where older runs reached', () => {
+    const runs = [
+      run(100, [hop(1, 'A'), hop(2, 'B')]),
+      run(200, [hop(1, 'A')])
+    ]
+
+    const current = currentPathFromRuns(runs)
+
+    expect(current.nodeKeys.has('1:A')).toBe(true)
+    expect(current.nodeKeys.has('2:B')).toBe(false)
   })
 })
