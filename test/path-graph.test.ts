@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildPathGraph, currentPathFromRuns, YOU_HOP_NUMBER } from '../src/renderer/src/lib/path-graph'
+import {
+  buildPathGraph,
+  currentPathFromRuns,
+  YOU_HOP_NUMBER
+} from '../src/renderer/src/lib/path-graph'
 import type { TraceRun } from '../src/renderer/src/lib/route-table'
 import type { HopSample } from '../src/shared/types'
 
@@ -173,10 +177,7 @@ describe('currentPathFromRuns', () => {
   })
 
   it('reflects a latest run that stopped short of where older runs reached', () => {
-    const runs = [
-      run(100, [hop(1, 'A'), hop(2, 'B')]),
-      run(200, [hop(1, 'A')])
-    ]
+    const runs = [run(100, [hop(1, 'A'), hop(2, 'B')]), run(200, [hop(1, 'A')])]
 
     const current = currentPathFromRuns(runs)
 

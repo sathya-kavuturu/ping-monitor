@@ -178,7 +178,11 @@ export interface CurrentPath {
   capturedAt: number | null
 }
 
-const EMPTY_CURRENT_PATH: CurrentPath = { nodeKeys: new Set(), edgeKeys: new Set(), capturedAt: null }
+const EMPTY_CURRENT_PATH: CurrentPath = {
+  nodeKeys: new Set(),
+  edgeKeys: new Set(),
+  capturedAt: null
+}
 
 /**
  * Picks out the single (hop, address) sequence the most recent completed
